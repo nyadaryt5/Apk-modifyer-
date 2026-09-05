@@ -187,6 +187,39 @@ def test_edit_with_autosign(server, apk, tmp_path):
         assert container.manifest_axml().manifest_facts()["debuggable"] is True
 
 
+def test_action_replace_string_by_resource_name(server, apk):
+    """The UI's resource-name field renames the app without the old value."""
+    base, store = server
+    file_id = _upload(base + "/api/upload", apk)["id"]
+
+    status, result = _post_json(
+        f"{base}/api/apk/{file_id}/action",
+        {"action": "replace-string", "res_name": "app_name", "new": "UI Renamed"},
+    )
+    assert status == 200
+    assert any("string/app_name" in n for n in result["notes"]), result["notes"]
+
+    from apkmod.apk import ApkContainer
+    from apkmod.arsc import ArscFile
+
+    with ApkContainer(store.path(result["id"])) as container:
+        assert ArscFile.parse(container.read("resources.arsc")).app_label() == "UI Renamed"
+
+
+def test_action_replace_string_needs_a_target(server, apk):
+    base, _store = server
+    file_id = _upload(base + "/api/upload", apk)["id"]
+    req = request.Request(
+        f"{base}/api/apk/{file_id}/action",
+        data=json.dumps({"action": "replace-string", "new": "x"}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with pytest.raises(Exception) as excinfo:
+        request.urlopen(req, timeout=20)
+    assert "400" in str(excinfo.value)
+
+
 def test_unknown_action_is_rejected(server, apk):
     base, _store = server
     file_id = _upload(base + "/api/upload", apk)["id"]

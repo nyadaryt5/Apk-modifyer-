@@ -209,6 +209,51 @@ class ArscFile:
         self.value_strings.strings[index] = new_text
         return old
 
+    def replace_by_name(
+        self,
+        entry_name: str,
+        new_text: str,
+        *,
+        type_name: str = "string",
+        config: Optional[str] = None,
+    ) -> Tuple[List[int], str]:
+        """Rewrite a resource by name -- e.g. ``string/app_name`` -- without knowing its value.
+
+        Returns the value-pool indices that changed and the previous text. Every
+        configuration is updated unless ``config`` narrows it (e.g. ``"v21"``),
+        which is what you want when renaming an app across locales.
+        """
+        matches = [
+            entry
+            for package in self.packages
+            for entry in package.entries
+            if entry.type_name == type_name
+            and entry.name == entry_name
+            and entry.data_type == TYPE_STRING
+        ]
+        if config is not None:
+            matches = [e for e in matches if e.config == config]
+        if not matches:
+            available = sorted({f"{e.type_name}/{e.name}" for e in self._string_typed_entries()})[:12]
+            raise ApkModError(
+                f"no {type_name}/{entry_name} string resource"
+                + (f" for config {config!r}" if config else "")
+                + (f" (have: {', '.join(available)})" if available else "")
+            )
+        indices = sorted({e.data for e in matches})
+        old = self.value_strings.get(indices[0]) or ""
+        for index in indices:
+            self.value_strings.strings[index] = new_text
+        return indices, old
+
+    def _string_typed_entries(self):
+        return [
+            entry
+            for package in self.packages
+            for entry in package.entries
+            if entry.data_type == TYPE_STRING
+        ]
+
     def replace_all(self, old_text: str, new_text: str) -> int:
         count = 0
         for i, string in enumerate(self.value_strings.strings):

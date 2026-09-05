@@ -306,11 +306,25 @@ def cmd_set_debuggable(args) -> int:
 
 def cmd_replace_string(args) -> int:
     editor = NativeEditor()
-    if args.index is not None:
+    chosen = [name for name, value in (("--res-name", args.res_name), ("--index", args.index), ("--old", args.old)) if value is not None]
+    if not chosen:
+        raise ApkModError("give one of --res-name NAME, --index N or --old TEXT, together with --new TEXT")
+    if len(chosen) > 1:
+        raise ApkModError(f"pick exactly one target, got {', '.join(chosen)}")
+
+    if args.res_name is not None:
+        res_type, _, entry = args.res_name.partition("/")
+        if entry:  # "string/app_name"
+            res_type, res_name = res_type, entry
+        else:  # bare "app_name" implies the string type
+            res_type, res_name = "string", res_type
+        result = editor.replace_string(
+            Path(args.apk), Path(args.out), "", args.new,
+            res_name=res_name, res_type=res_type, res_config=args.config,
+        )
+    elif args.index is not None:
         result = editor.replace_string(Path(args.apk), Path(args.out), "", args.new, index=args.index)
     else:
-        if not args.old:
-            raise ApkModError("give --old TEXT (or --index N) together with --new TEXT")
         result = editor.replace_string(Path(args.apk), Path(args.out), args.old, args.new)
     _finish_edit(result, args, editor)
     return 0
@@ -526,6 +540,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("replace-string", help="rewrite a resource string")
     p.add_argument("apk")
     p.add_argument("-o", "--out", required=True)
+    p.add_argument("--res-name", help="resource name, e.g. app_name or string/app_name (recommended)")
+    p.add_argument("--config", help="limit --res-name to one config, e.g. v21 or de")
     p.add_argument("--old", help="exact current value")
     p.add_argument("--new", required=True)
     p.add_argument("--index", type=int, help="string-pool index instead of --old")

@@ -134,7 +134,8 @@ a{color:var(--acc)}
       <button id="add-perm">Add permission</button>
     </div>
     <div class="row" style="margin-top:10px">
-      <div><label>resource string (exact)</label><input id="str-old"></div>
+      <div><label>resource name (e.g. app_name)</label><input id="str-name" placeholder="app_name"></div>
+      <div><label>or exact current value</label><input id="str-old"></div>
       <div><label>replace with</label><input id="str-new"></div>
       <button id="str-rep">Replace string</button>
       <button id="debug-on">Set debuggable</button>
@@ -210,7 +211,12 @@ async function action(body){
 }
 $('#rm-perm').onclick=()=>action({action:'remove-permission',permissions:$('#perm').value.split(',').map(s=>s.trim()).filter(Boolean),sign:$('#auto-sign').checked});
 $('#add-perm').onclick=()=>action({action:'add-permission',permission:$('#perm-add').value.trim(),sign:$('#auto-sign').checked});
-$('#str-rep').onclick=()=>action({action:'replace-string',old:$('#str-old').value,new:$('#str-new').value,sign:$('#auto-sign').checked});
+$('#str-rep').onclick=()=>{
+  const body={action:'replace-string',new:$('#str-new').value,sign:$('#auto-sign').checked};
+  const name=$('#str-name').value.trim(), old=$('#str-old').value;
+  if(name)body.res_name=name; else body.old=old;
+  action(body);
+};
 $('#debug-on').onclick=()=>action({action:'set-debuggable',enabled:true,sign:$('#auto-sign').checked});
 $('#align').onclick=()=>action({action:'align'});
 $('#sign').onclick=()=>action({action:'sign'});
@@ -373,10 +379,13 @@ def build_handler(store: Store):
                 notes += result.notes
             elif action == "replace-string":
                 old, new = payload.get("old"), payload.get("new")
+                res_name = payload.get("res_name")
                 if new is None:
                     raise ApkModError("no replacement string given")
+                if res_name is None and not old:
+                    raise ApkModError("give 'res_name' (e.g. app_name) or the exact 'old' value")
                 out = store.root / f"tmp-{uuid.uuid4().hex[:8]}.apk"
-                result = editor.replace_string(apk, out, old or "", new)
+                result = editor.replace_string(apk, out, old or "", new, res_name=res_name)
                 notes += result.notes
             elif action == "set-debuggable":
                 out = store.root / f"tmp-{uuid.uuid4().hex[:8]}.apk"

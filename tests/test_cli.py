@@ -100,6 +100,41 @@ def test_replace_string_needs_a_target(capsys, apk, tmp_path):
     assert "error:" in capsys.readouterr().err
 
 
+def test_replace_string_by_resource_name(capsys, apk, tmp_path):
+    """Rename the app without knowing its current value."""
+    from apkmod.apk import ApkContainer
+    from apkmod.arsc import ArscFile
+
+    out = tmp_path / "renamed.apk"
+    assert main(["replace-string", str(apk), "-o", str(out), "--res-name", "app_name", "--new", "My App"]) == 0
+    assert "string/app_name: 'Demo App' -> 'My App'" in _out(capsys)
+    with ApkContainer(out) as container:
+        assert ArscFile.parse(container.read("resources.arsc")).app_label() == "My App"
+
+
+def test_replace_string_by_qualified_resource_name(capsys, apk, tmp_path):
+    out = tmp_path / "renamed.apk"
+    assert main(["replace-string", str(apk), "-o", str(out), "--res-name", "string/greeting", "--new", "Yo"]) == 0
+    assert "string/greeting: 'Hello world' -> 'Yo'" in _out(capsys)
+
+
+def test_replace_string_unknown_resource_lists_alternatives(capsys, apk, tmp_path):
+    code = main(["replace-string", str(apk), "-o", str(tmp_path / "x.apk"), "--res-name", "nope", "--new", "x"])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "no string/nope string resource" in err
+    assert "string/app_name" in err  # it tells you what does exist
+
+
+def test_replace_string_rejects_two_targets(capsys, apk, tmp_path):
+    code = main(
+        ["replace-string", str(apk), "-o", str(tmp_path / "x.apk"),
+         "--res-name", "app_name", "--old", "Demo App", "--new", "x"]
+    )
+    assert code == 2
+    assert "pick exactly one target" in capsys.readouterr().err
+
+
 def test_replace_file(capsys, apk, tmp_path):
     source = tmp_path / "config.json"
     source.write_bytes(b'{"ads":false}')

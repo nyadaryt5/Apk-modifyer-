@@ -74,7 +74,12 @@ More edits, all native:
 ```bash
 apkmod manifest app.apk --xml                    # readable manifest
 apkmod strings app.apk --match app_name          # resource strings
-apkmod replace-string app.apk -o mod.apk --old "Demo App" --new "My App"
+
+# rename the app by resource name -- no need to know the current value
+apkmod replace-string app.apk -o mod.apk --res-name app_name --new "My App"
+apkmod replace-string app.apk -o mod.apk --res-name string/greeting --new "Hi"
+apkmod replace-string app.apk -o mod.apk --old "Demo App" --new "My App"   # by exact value
+apkmod replace-string app.apk -o mod.apk --index 12 --new "My App"         # by pool index
 apkmod set-debuggable app.apk -o mod.apk         # flip android:debuggable
 apkmod replace-file app.apk -o mod.apk --entry assets/config.json --file config.json
 apkmod replace-file app.apk -o mod.apk --entry assets/extra.txt --file extra.txt --add

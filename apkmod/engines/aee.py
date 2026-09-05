@@ -123,13 +123,35 @@ class NativeEditor(Engine):
             raise ApkModError("this APK has no resources.arsc")
         return ArscFile.parse(blob).string_entries()
 
-    def replace_string(self, apk: Path, out: Path, old: str, new: str, *, index: Optional[int] = None) -> EditResult:
+    def replace_string(
+        self,
+        apk: Path,
+        out: Path,
+        old: str,
+        new: str,
+        *,
+        index: Optional[int] = None,
+        res_name: Optional[str] = None,
+        res_type: str = "string",
+        res_config: Optional[str] = None,
+    ) -> EditResult:
+        """Rewrite a resource string by pool index, exact value, or resource name.
+
+        ``res_name`` is the ergonomic path -- ``app_name`` renames the app without
+        you needing to know what it currently says.
+        """
         with ApkContainer(apk) as container:
             blob = container.arsc_bytes()
             if blob is None:
                 raise ApkModError("this APK has no resources.arsc")
             table = ArscFile.parse(blob)
-            if index is not None:
+            if res_name is not None:
+                indices, previous = table.replace_by_name(
+                    res_name, new, type_name=res_type, config=res_config
+                )
+                where = f"{res_type}/{res_name}" + (f" [{res_config}]" if res_config else "")
+                notes = [f"{where}: {previous!r} -> {new!r} ({len(indices)} value slot(s))"]
+            elif index is not None:
                 previous = table.replace_string(index, new)
                 notes = [f"string #{index}: {previous!r} -> {new!r}"]
             else:
