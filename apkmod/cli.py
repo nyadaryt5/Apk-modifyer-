@@ -434,6 +434,283 @@ def _add_signing_options(parser) -> None:
     group.add_argument("--sign", action="store_true", help="re-sign the result")
 
 
+# ==========================================================================
+# diffing and bundles (MT Manager equivalents)
+# ==========================================================================
+def cmd_diff(args) -> int:
+    from .engines.mtmanager import diff_apks
+
+    diff = diff_apks(Path(args.left), Path(args.right), compare_content=not args.fast)
+    _emit(diff.as_dict(), args.json, diff.format(include_identical=args.all, limit=args.limit))
+    return 0
+
+
+def cmd_bundle_unpack(args) -> int:
+    from .engines.mtmanager import open_bundle
+
+    parts, others = open_bundle(Path(args.bundle), Path(args.out))
+    if args.json:
+        print(json.dumps({"parts": [p.as_dict() for p in parts], "other_files": others}, indent=2))
+    else:
+        print(f"unpacked {len(parts)} APK(s) into {args.out}")
+        for part in parts:
+            tag = "base " if part.is_base else "split"
+            print(f"  [{tag}] {part.name}  ({human_size(part.size)})")
+        if others:
+            print(f"  sidecar files: {', '.join(others)}")
+    return 0
+
+
+def cmd_bundle_pack(args) -> int:
+    from .engines.mtmanager import rebuild_bundle, open_bundle
+
+    source = Path(args.dir)
+    # Re-read the directory as a bundle so the parts are discovered, not assumed.
+    parts, _ = open_bundle(source, source)
+    out = rebuild_bundle(parts, source, Path(args.out))
+    print(f"wrote {out}  ({human_size(out.stat().st_size)})")
+    return 0
+
+
+# ==========================================================================
+# JADX
+# ==========================================================================
+def cmd_decompile_java(args) -> int:
+    from .engines.jadx import JadxEngine
+
+    engine = JadxEngine(args.jadx)
+    result = engine.decompile(
+        Path(args.apk),
+        Path(args.out),
+        threads=args.threads,
+        show_bad_code=args.show_bad_code,
+        deobfuscate=args.deobf,
+        include_resources=not args.no_res,
+        timeout=args.timeout,
+    )
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return 0 if result["ok"] else 1
+    print(f"output: {result['output']}  ({result['java_files']} .java files)")
+    for warning in result["warnings"][:20]:
+        print(f"  ! {warning}")
+    if result["note"]:
+        print(f"  note: {result['note']}")
+    return 0 if result["ok"] else 1
+
+
+def cmd_java_search(args) -> int:
+    from .engines.jadx import JadxEngine
+
+    hits = JadxEngine(args.jadx).search(Path(args.dir), args.pattern, limit=args.limit)
+    if args.json:
+        print(json.dumps({"count": len(hits), "matches": hits}, indent=2))
+    else:
+        for hit in hits:
+            print(f"{hit['file']}:{hit['line']}: {hit['text']}")
+        print(f"{len(hits)} match(es)")
+    return 0
+
+
+# ==========================================================================
+# Frida
+# ==========================================================================
+def cmd_frida_server(args) -> int:
+    from .engines.frida import FridaEngine
+
+    engine = FridaEngine()
+    if args.action == "push":
+        if not args.binary:
+            eprint("error: --binary is required (the android frida-server build for your ABI)")
+            return 2
+        result = engine.push_server(Path(args.binary), serial=args.serial)
+    else:
+        result = engine.start_server(serial=args.serial, args=args.args or "")
+    print(json.dumps(result, indent=2) if args.json else json.dumps(result, indent=2))
+    return 0 if result.get("ok") else 1
+
+
+def cmd_frida_ps(args) -> int:
+    from .engines.frida import FridaEngine
+
+    result = FridaEngine().list_processes(serial=args.serial, usb=not args.local)
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        for process in result["processes"]:
+            print(f"{process['pid']:>7}  {process['name']}")
+        print(f"{result['count']} process(es)")
+    return 0
+
+
+def cmd_frida_run(args) -> int:
+    from .engines.frida import FridaEngine
+
+    result = FridaEngine().run_script(
+        Path(args.script),
+        package=args.package,
+        pid=args.pid,
+        spawn=not args.attach,
+        usb=not args.local,
+        serial=args.serial,
+        timeout=args.timeout,
+        quiet=not args.interactive,
+    )
+    if result["stdout"]:
+        print(result["stdout"])
+    if result["stderr"]:
+        eprint(result["stderr"])
+    if args.json:
+        print(json.dumps({k: v for k, v in result.items() if k != "stdout"}, indent=2))
+    return 0 if result["ok"] else 1
+
+
+# ==========================================================================
+# AI
+# ==========================================================================
+def cmd_platform(args) -> int:
+    from .platform_info import detect
+
+    info = detect()
+    _emit(info.as_dict(), args.json, info.format())
+    return 0
+
+
+def _ai_client(args):
+    from .ai import AIClient, load_config
+
+    config = load_config(args.config)
+    if args.model:
+        config.default_model = args.model
+    if args.strategy:
+        config.routing.strategy = args.strategy
+    if args.max_wait:
+        config.routing.max_wait_seconds = args.max_wait
+    return AIClient(config)
+
+
+def cmd_ai_doctor(args) -> int:
+    from .ai import load_config
+
+    config = load_config(args.config)
+    usable = config.enabled_providers
+    payload = config.as_dict()
+    payload["usable_providers"] = [p.name for p in usable]
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    print(f"config: {config.path or '(none -- using environment only)'}")
+    print(f"default model: {config.default_model or '(unset)'}")
+    print(f"routing: strategy={config.routing.strategy} "
+          f"max_wait={config.routing.max_wait_seconds}s "
+          f"retry_on={config.routing.retry_statuses}")
+    print()
+    if not config.providers:
+        print("no provider configured. Either export a key:")
+        print("  export OPENAI_API_KEY=sk-...   # or ANTHROPIC_API_KEY, GEMINI_API_KEY, ...")
+        print("or write ~/.apkmod/ai.json -- see the README for the full schema.")
+    else:
+        for provider in config.providers:
+            flag = "ready " if provider.usable_keys else "no key"
+            print(f"[{flag}] {provider.name} ({provider.kind})"
+                  f"{' -> ' + provider.base_url if provider.base_url else ''}")
+            print(f"         keys   : {len(provider.usable_keys)}")
+            print(f"         models : {', '.join(provider.models) or '(unset)'}")
+        print()
+        print(f"{len(usable)} provider(s) usable, "
+              f"{sum(len(p.usable_keys) for p in usable)} key(s) in the pool")
+    for warning in config.warnings:
+        print(f"warning: {warning}")
+    return 0
+
+
+def cmd_ai(args) -> int:
+    import tempfile
+
+    from .ai import Agent, ToolContext, work_dir
+
+    client = _ai_client(args)
+    session = Path(args.workdir) if args.workdir else work_dir() / "ai" / _session_id()
+    session.mkdir(parents=True, exist_ok=True)
+
+    apk = Path(args.apk) if args.apk else None
+    if apk is not None and not apk.is_file():
+        eprint(f"error: no such file: {apk}")
+        return 2
+
+    context = ToolContext(
+        work_dir=session,
+        apk=apk,
+        decoded_dir=Path(args.decoded) if args.decoded else None,
+        auto_confirm=args.yes,
+    )
+    events = []
+
+    def on_event(kind, payload):
+        events.append({"kind": kind, **payload})
+        if args.verbose and not args.json:
+            _print_ai_event(kind, payload)
+
+    agent = Agent(
+        client,
+        context=context,
+        max_iterations=args.max_steps,
+        on_event=on_event,
+    )
+    result = agent.run(args.task, model=args.model)
+
+    if args.json:
+        payload = result.as_dict()
+        payload["session"] = str(session)
+        payload["events"] = events
+        print(json.dumps(payload, indent=2, default=str))
+    else:
+        for step in result.steps:
+            for call, outcome in zip(step.tool_calls, step.tool_results):
+                status = outcome.get("status")
+                print(f"  [{step.index}] {call['name']}({json.dumps(call['arguments'], ensure_ascii=False)[:120]}) -> {status}")
+        print()
+        print(result.text or "(no final answer)")
+        print()
+        print(
+            f"steps={len(result.steps)} tool_calls={result.tool_call_count} "
+            f"tokens={result.total_tokens} waited={result.waited_seconds:.1f}s "
+            f"finished={result.finished}"
+        )
+        if result.pending_confirmations:
+            print(
+                f"{len(result.pending_confirmations)} change(s) were NOT applied; "
+                "re-run with --yes to allow file modifications"
+            )
+        if result.error:
+            eprint(f"error: {result.error}")
+    if args.transcript:
+        Path(args.transcript).write_text(
+            json.dumps(result.as_dict(), indent=2, default=str), encoding="utf-8"
+        )
+    return 0 if result.finished == "complete" else 1
+
+
+def _session_id() -> str:
+    import time
+
+    return time.strftime("%Y%m%d-%H%M%S")
+
+
+def _print_ai_event(kind: str, payload: dict) -> None:
+    if kind == "request":
+        eprint(f"  -> {payload['endpoint']} ({payload['model']})")
+    elif kind == "waited":
+        eprint(f"  .. rate limited, waited {payload['waited_seconds']}s")
+    elif kind == "error":
+        eprint(f"  !! {payload['endpoint']}: {payload['status']} {payload['message'][:100]}")
+    elif kind == "tool":
+        eprint(f"  * {payload['name']}({json.dumps(payload['arguments'], ensure_ascii=False)[:140]})")
+    elif kind == "tool_result":
+        eprint(f"    = {payload['status']}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="apkmod", description=DESCRIPTION, epilog=ETHICS_NOTE)
     parser.add_argument("--version", action="version", version=f"apkmod {__version__}")
@@ -613,6 +890,105 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8080)
     p.set_defaults(func=cmd_serve)
+
+    # ---------------- diffing and bundles (MT Manager equivalents) --------
+    p = sub.add_parser("diff", help="compare two APKs entry by entry")
+    p.add_argument("left")
+    p.add_argument("right")
+    p.add_argument("--all", action="store_true", help="also list unchanged entries")
+    p.add_argument("--fast", action="store_true", help="trust the CRC, skip SHA-256 confirmation")
+    p.add_argument("--limit", type=int, default=200)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_diff)
+
+    p = sub.add_parser("bundle-unpack", help="unpack a split-APK bundle (xapk/apks)")
+    p.add_argument("bundle")
+    p.add_argument("--out", default="bundle")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_bundle_unpack)
+
+    p = sub.add_parser("bundle-pack", help="repack an unpacked bundle directory")
+    p.add_argument("dir")
+    p.add_argument("--out", default="rebuilt.xapk")
+    p.set_defaults(func=cmd_bundle_pack)
+
+    # ---------------- JADX ------------------------------------------------
+    p = sub.add_parser("decompile-java", help="decompile DEX to Java with JADX (needs jadx)")
+    p.add_argument("apk")
+    p.add_argument("--out", default="java")
+    p.add_argument("--threads", type=int, default=4)
+    p.add_argument("--show-bad-code", action="store_true")
+    p.add_argument("--deobf", action="store_true", help="rename obfuscated identifiers")
+    p.add_argument("--no-res", action="store_true")
+    p.add_argument("--timeout", type=int, default=900)
+    p.add_argument("--jadx", help="path to the jadx launcher")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_decompile_java)
+
+    p = sub.add_parser("java-search", help="regex search decompiled Java sources")
+    p.add_argument("dir")
+    p.add_argument("pattern")
+    p.add_argument("--limit", type=int, default=100)
+    p.add_argument("--jadx")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_java_search)
+
+    # ---------------- Frida ----------------------------------------------
+    p = sub.add_parser("frida-server", help="push or start frida-server on a device")
+    p.add_argument("action", choices=["push", "start"])
+    p.add_argument("--binary", help="local frida-server binary (for 'push')")
+    p.add_argument("--serial", help="adb device serial")
+    p.add_argument("--args", help="extra frida-server arguments (for 'start')")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_frida_server)
+
+    p = sub.add_parser("frida-ps", help="list processes visible to frida")
+    p.add_argument("--serial")
+    p.add_argument("--local", action="store_true", help="this machine instead of USB")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_frida_ps)
+
+    p = sub.add_parser("frida-run", help="run a Frida script against a package or pid")
+    p.add_argument("--script", required=True)
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument("--package")
+    group.add_argument("--pid", type=int)
+    p.add_argument("--attach", action="store_true", help="attach instead of spawning")
+    p.add_argument("--serial")
+    p.add_argument("--local", action="store_true")
+    p.add_argument("--interactive", action="store_true", help="do not pass -q")
+    p.add_argument("--timeout", type=int, default=120)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_frida_run)
+
+    # ---------------- platform and AI ------------------------------------
+    p = sub.add_parser("platform", help="show the host platform and what it enables")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_platform)
+
+    p = sub.add_parser("ai-doctor", help="show configured AI providers and routing")
+    p.add_argument("--config", help="path to ai.json")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_ai_doctor)
+
+    p = sub.add_parser(
+        "ai",
+        help="run a task with the AI agent (multi-provider, auto-routing, waits on rate limits)",
+    )
+    p.add_argument("task", help="what you want done, in plain language")
+    p.add_argument("--apk", help="APK to work on")
+    p.add_argument("--decoded", help="decoded smali tree the agent may edit")
+    p.add_argument("--workdir", help="session directory (default: ~/.apkmod/work/ai/<id>)")
+    p.add_argument("--config", help="path to ai.json")
+    p.add_argument("--model", help="override the model")
+    p.add_argument("--strategy", choices=["priority", "round-robin", "lowest-latency"])
+    p.add_argument("--max-wait", type=int, help="max seconds to wait out rate limits")
+    p.add_argument("--max-steps", type=int, default=12)
+    p.add_argument("--yes", action="store_true", help="allow file-modifying tools")
+    p.add_argument("--transcript", help="write the full transcript to this file")
+    p.add_argument("--verbose", action="store_true", help="stream routing and tool events")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_ai)
 
     return parser
 

@@ -110,7 +110,19 @@ class ToolRegistry:
             raise ApkModError(f"unknown tool '{name}' (have: {', '.join(self._tools)})") from None
 
     def call(self, name: str, arguments: dict) -> dict:
-        """Run a tool, converting any failure into a structured result."""
+        """
+        Run a tool, converting any failure into a structured result.
+
+        Unknown names are data, not exceptions: a model will occasionally invent
+        a tool name, and that must come back as a result it can react to rather
+        than kill the agent loop.
+        """
+        if name not in self._tools:
+            return self.context.record(
+                name,
+                arguments or {},
+                {"status": "error", "error": f"unknown tool '{name}'", "available": self.names()},
+            )
         tool = self.get(name)
         if tool.confirm and not self.context.auto_confirm:
             self.pending_confirmations.append({"tool": name, "arguments": arguments})

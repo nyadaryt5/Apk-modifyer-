@@ -237,6 +237,9 @@ def load_config(explicit: Optional[str] = None, *, use_env: bool = True) -> AICo
         _merge_env(config, warnings)
 
     _dedupe_keys(config)
+    # The warnings were collected into a local list; without this line they are
+    # silently dropped and a malformed config looks fine.
+    config.warnings = warnings
     return config
 
 
