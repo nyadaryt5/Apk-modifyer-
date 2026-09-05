@@ -168,7 +168,7 @@ pip install -e '.[dev]'
 pytest
 ```
 
-128 tests. The fixtures in `tests/fixture.py` are hand-encoded from the format
+130 tests. The fixtures in `tests/fixture.py` are hand-encoded from the format
 specifications and do **not** import `apkmod`, so the binary parsers are checked
 against a second implementation rather than against themselves. The signing
 tests also hand the signature to the `openssl` command line for independent
