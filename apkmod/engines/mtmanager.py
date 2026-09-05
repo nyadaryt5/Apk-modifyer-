@@ -290,6 +290,32 @@ def rebuild_bundle(parts: List[BundlePart], others_dir: Optional[Path], out: Pat
     return out
 
 
+def parts_from_dir(directory: Path) -> List[BundlePart]:
+    """
+    Build the part list for an already-unpacked bundle directory.
+
+    This is what repacking needs: the parts are loose files at that point, not
+    members of a zip, so they cannot be discovered through ``open_bundle``.
+    """
+    directory = Path(directory)
+    if not directory.is_dir():
+        raise ApkModError(f"not a directory: {directory}")
+    parts = [
+        BundlePart(
+            name=path.name,
+            path=path,
+            is_base=path.stem.lower() == "base",
+            size=path.stat().st_size,
+        )
+        for path in directory.rglob("*.apk")
+        if path.is_file()
+    ]
+    if not parts:
+        raise ApkModError(f"no .apk files under {directory}; nothing to repack")
+    parts.sort(key=lambda p: (not p.is_base, p.name))
+    return parts
+
+
 # ==========================================================================
 # engine
 # ==========================================================================

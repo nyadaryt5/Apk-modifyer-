@@ -462,13 +462,17 @@ def cmd_bundle_unpack(args) -> int:
 
 
 def cmd_bundle_pack(args) -> int:
-    from .engines.mtmanager import rebuild_bundle, open_bundle
+    from .engines.mtmanager import parts_from_dir, rebuild_bundle
 
     source = Path(args.dir)
-    # Re-read the directory as a bundle so the parts are discovered, not assumed.
-    parts, _ = open_bundle(source, source)
+    # The parts are loose files here, not members of a zip, so they are
+    # discovered from the directory rather than through open_bundle().
+    parts = parts_from_dir(source)
     out = rebuild_bundle(parts, source, Path(args.out))
     print(f"wrote {out}  ({human_size(out.stat().st_size)})")
+    for part in parts:
+        tag = "base " if part.is_base else "split"
+        print(f"  [{tag}] {part.name}  ({human_size(part.size)})")
     return 0
 
 
@@ -626,18 +630,24 @@ def cmd_ai_doctor(args) -> int:
 
 
 def cmd_ai(args) -> int:
-    import tempfile
+    from .ai import Agent, ToolContext
+    from .util import work_dir
 
-    from .ai import Agent, ToolContext, work_dir
-
-    client = _ai_client(args)
-    session = Path(args.workdir) if args.workdir else work_dir() / "ai" / _session_id()
-    session.mkdir(parents=True, exist_ok=True)
-
+    # Validate what the user asked for before doing any setup work.
     apk = Path(args.apk) if args.apk else None
     if apk is not None and not apk.is_file():
-        eprint(f"error: no such file: {apk}")
-        return 2
+        raise ApkModError(f"no such file: {apk}")
+
+    client = _ai_client(args)
+    # Fail fast on a configuration problem: that is a usage error (exit 2, like
+    # every other ApkModError), not a task that started and then failed.
+    if not client.router.endpoints:
+        raise ApkModError(
+            "no AI provider is configured -- set an API key or write ~/.apkmod/ai.json "
+            "(see `apkmod ai-doctor`)"
+        )
+    session = Path(args.workdir) if args.workdir else work_dir() / "ai" / _session_id()
+    session.mkdir(parents=True, exist_ok=True)
 
     context = ToolContext(
         work_dir=session,

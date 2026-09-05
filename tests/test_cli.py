@@ -315,3 +315,166 @@ def test_adb_commands_without_a_device(capsys, apk, monkeypatch):
     monkeypatch.setattr("apkmod.engines.apktoolm.find_adb", lambda: None)
     assert main(["adb-push", str(apk)]) == 2
     assert "adb is not available" in capsys.readouterr().err
+
+
+# ==========================================================================
+# the engines added alongside the AI layer
+# ==========================================================================
+def _modified_apk(apk, tmp_path):
+    """A copy with one changed entry and one removed, for diff tests."""
+    from apkmod.align import repack
+    from apkmod.apk import ApkContainer
+    from apkmod.arsc import ArscFile
+
+    with ApkContainer(apk) as container:
+        arsc = ArscFile.parse(container.arsc_bytes())
+        arsc.replace_by_name("app_name", "Modified")
+        payload = arsc.serialize()
+    out = tmp_path / "changed.apk"
+    repack(apk, out, replace={"resources.arsc": payload}, exclude=["res/raw/keep.txt"])
+    return out
+
+
+def test_diff(capsys, apk, tmp_path):
+    changed = _modified_apk(apk, tmp_path)
+    assert main(["diff", str(apk), str(changed)]) == 0
+    out = _out(capsys)
+    assert "- res/raw/keep.txt" in out
+    assert "~ resources.arsc" in out
+
+
+def test_diff_json(capsys, apk, tmp_path):
+    changed = _modified_apk(apk, tmp_path)
+    assert main(["diff", str(apk), str(changed), "--json"]) == 0
+    payload = json.loads(_out(capsys))
+    assert payload["counts"]["removed"] == 1
+    assert payload["counts"]["changed"] == 1
+    assert payload["counts"]["identical"] == 4
+
+
+def test_diff_all_includes_unchanged(capsys, apk, tmp_path):
+    changed = _modified_apk(apk, tmp_path)
+    assert main(["diff", str(apk), str(changed), "--all"]) == 0
+    assert "AndroidManifest.xml" in _out(capsys)
+
+
+def test_bundle_round_trip(capsys, apk, tmp_path):
+    bundle = tmp_path / "app.xapk"
+    with zipfile.ZipFile(bundle, "w") as zf:
+        zf.write(apk, "base.apk")
+        zf.write(apk, "config.arm64_v8a.apk")
+        zf.writestr("manifest.json", "{}")
+
+    assert main(["bundle-unpack", str(bundle), "--out", str(tmp_path / "u")]) == 0
+    out = _out(capsys)
+    assert "2 APK(s)" in out
+    assert "[base ] base.apk" in out
+
+    rebuilt = tmp_path / "rebuilt.xapk"
+    assert main(["bundle-pack", str(tmp_path / "u"), "--out", str(rebuilt)]) == 0
+    with zipfile.ZipFile(rebuilt) as zf:
+        names = zf.namelist()
+    assert len(names) == len(set(names)) == 3
+
+
+def test_bundle_unpack_json(capsys, apk, tmp_path):
+    bundle = tmp_path / "app.xapk"
+    with zipfile.ZipFile(bundle, "w") as zf:
+        zf.write(apk, "base.apk")
+        zf.writestr("manifest.json", "{}")
+    assert main(["bundle-unpack", str(bundle), "--out", str(tmp_path / "u"), "--json"]) == 0
+    payload = json.loads(_out(capsys))
+    assert payload["parts"][0]["is_base"] is True
+    assert payload["other_files"] == ["manifest.json"]
+
+
+def test_platform(capsys):
+    assert main(["platform"]) == 0
+    out = _out(capsys)
+    assert "root:" in out
+    assert "present:" in out
+
+
+def test_platform_json(capsys):
+    assert main(["platform", "--json"]) == 0
+    payload = json.loads(_out(capsys))
+    assert payload["family"] in ("desktop", "android", "other")
+    assert "openssl" in payload["binaries"]
+
+
+def test_ai_doctor_with_nothing_configured(capsys, monkeypatch, tmp_path):
+    for var in ("APKMOD_AI_CONFIG", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+                "GEMINI_API_KEY", "OPENROUTER_API_KEY", "APKMOD_AI_KEYS",
+                "GROQ_API_KEY", "DEEPSEEK_API_KEY", "MISTRAL_API_KEY",
+                "XAI_API_KEY", "TOGETHER_API_KEY", "FIREWORKS_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["ai-doctor"]) == 0
+    out = _out(capsys)
+    assert "no provider configured" in out
+    assert "OPENAI_API_KEY" in out  # tells the user what to do next
+
+
+def test_ai_doctor_shows_providers_without_leaking_keys(capsys, tmp_path):
+    config = tmp_path / "ai.json"
+    config.write_text(
+        json.dumps(
+            {
+                "default_model": "gpt-x",
+                "providers": [
+                    {"name": "primary", "keys": ["sk-super-secret-value"], "models": ["gpt-x"]}
+                ],
+            }
+        )
+    )
+    assert main(["ai-doctor", "--config", str(config)]) == 0
+    out = _out(capsys)
+    assert "primary" in out
+    assert "sk-super-secret-value" not in out
+    assert "1 provider(s) usable" in out
+
+
+def test_ai_doctor_json(capsys, tmp_path):
+    config = tmp_path / "ai.json"
+    config.write_text(json.dumps({"providers": [{"name": "p", "keys": ["k"], "models": ["m"]}]}))
+    assert main(["ai-doctor", "--config", str(config), "--json"]) == 0
+    payload = json.loads(_out(capsys))
+    assert payload["usable_providers"] == ["p"]
+    assert payload["routing"]["strategy"] == "priority"
+
+
+def test_ai_without_a_provider_is_a_clean_error(capsys, monkeypatch, tmp_path):
+    for var in ("APKMOD_AI_CONFIG", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+                "GEMINI_API_KEY", "OPENROUTER_API_KEY", "APKMOD_AI_KEYS",
+                "GROQ_API_KEY", "DEEPSEEK_API_KEY", "MISTRAL_API_KEY",
+                "XAI_API_KEY", "TOGETHER_API_KEY", "FIREWORKS_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    # Not a traceback and not a hang: exit 2 with a message.
+    assert main(["ai", "rename the app"]) == 2
+
+
+def test_ai_rejects_a_missing_apk(capsys, tmp_path):
+    assert main(["ai", "do something", "--apk", str(tmp_path / "absent.apk")]) == 2
+    assert "no such file" in capsys.readouterr().err
+
+
+def test_decompile_java_without_jadx_is_a_clean_error(capsys, apk, tmp_path, monkeypatch):
+    monkeypatch.setattr("apkmod.engines.jadx.find_jadx", lambda explicit=None: None)
+    assert main(["decompile-java", str(apk), "--out", str(tmp_path / "java")]) == 2
+    assert "jadx is not installed" in capsys.readouterr().err
+
+
+def test_frida_ps_without_frida_is_a_clean_error(capsys, monkeypatch):
+    monkeypatch.setattr("apkmod.engines.frida.find_frida_ps", lambda: None)
+    assert main(["frida-ps"]) == 2
+    assert "frida-ps is not installed" in capsys.readouterr().err
+
+
+def test_frida_run_requires_a_target(capsys, tmp_path):
+    script = tmp_path / "hook.js"
+    script.write_text("console.log(1)")
+    with pytest.raises(SystemExit):
+        main(["frida-run", "--script", str(script)])  # neither --package nor --pid
