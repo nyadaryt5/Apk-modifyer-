@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initPlatformDiagnostics();
     initWebSocket();
     loadApkList();
+    initAndroidAppCompiler();
     initAutonomousAgent();
     initLuckyPatcher();
     initApktoolM();
@@ -148,6 +149,38 @@ document.getElementById("btnClearConsole")?.addEventListener("click", () => {
     const box = document.getElementById("consoleOutput");
     if (box) box.innerHTML = "";
 });
+
+function initAndroidAppCompiler() {
+    const btn = document.getElementById("btnCompileAndroidApp");
+    btn?.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Compiling APK...";
+        logConsole("[Build] Compiling standalone OmniAPK Studio Android App (.apk)...", "info");
+
+        try {
+            const res = await fetch("/api/apk/compile_android_app", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    package_name: "com.omniapk.studio",
+                    app_name: "OmniAPK Studio",
+                    version_name: "2.0.0"
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                logConsole(`[✓] Standalone Android APK compiled: ${data.filename} (${(data.size_bytes / 1024).toFixed(1)} KB)`, "success");
+                alert(`✓ Android APK Compiled Successfully!\nFilename: ${data.filename}\nSize: ${(data.size_bytes / 1024).toFixed(1)} KB\nSigned with V1+V2 Scheme`);
+                loadApkList();
+            }
+        } catch (err) {
+            logConsole(`[Error] Build APK failed: ${err}`, "error");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = "📱 <span class='btn-label'>Build Android APK</span>";
+        }
+    });
+}
 
 // --- Tab 1: Autonomous AI Modding Agent ---
 function initAutonomousAgent() {

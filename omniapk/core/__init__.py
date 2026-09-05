@@ -8,6 +8,7 @@ from omniapk.core.axml_editor import AxmlEditor
 from omniapk.core.arsc_parser import ArscParser
 from omniapk.core.apk_packager import ApkPackager
 from omniapk.core.apk_signer import ApkSigner
+from omniapk.core.apk_builder import AndroidAppCompiler
 
 __all__ = [
     "DexParser",
@@ -17,4 +18,5 @@ __all__ = [
     "ArscParser",
     "ApkPackager",
     "ApkSigner",
+    "AndroidAppCompiler",
 ]

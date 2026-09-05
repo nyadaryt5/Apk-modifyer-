@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from omniapk.config import get_platform_info, DEFAULT_HOST, DEFAULT_PORT
-from omniapk.core import ApkPackager, ApkSigner, DexParser, DexEditor
+from omniapk.core import ApkPackager, ApkSigner, DexParser, DexEditor, AndroidAppCompiler
 from omniapk.modules.apktool import ApktoolEngine
 from omniapk.modules.apktool_m import ApktoolMEngine
 from omniapk.modules.lucky_patcher import LuckyPatcherEngine
@@ -131,6 +131,21 @@ def cmd_gg_gen(args):
     else:
         print(script)
 
+def cmd_build_android_app(args):
+    """Compile launchable standalone Android APK."""
+    out = Path(args.output or f"OmniAPK_Studio_v{args.version_name}.apk")
+    console.print(f"[bold cyan]📱 Compiling OmniAPK Standalone Android App ({args.package})...[/bold cyan]")
+    apk_path = AndroidAppCompiler.compile_apk(
+        output_apk_path=out,
+        package_name=args.package,
+        app_name=args.name,
+        version_name=args.version_name,
+        version_code=args.version_code
+    )
+    console.print(f"[bold green]✓ Standalone Android APK Compiled Successfully![/bold green]")
+    console.print(f"Output File: [bold cyan]{apk_path}[/bold cyan] ({apk_path.stat().st_size / (1024*1024):.2f} MB)")
+    console.print(f"Signed with V1 + V2 Cryptographic Scheme (Installable on Android 5.0 - 15+)")
+
 def cmd_sign(args):
     """Sign APK."""
     apk = Path(args.apk)
@@ -233,6 +248,14 @@ def main():
     p_gg.add_argument("--speed", type=float, default=1.0, help="Speedhack multiplier")
     p_gg.add_argument("-o", "--output", help="Output .lua file")
 
+    # Build Android App
+    p_build = subparsers.add_parser("build-android-app", help="Compile standalone launchable Android APK app")
+    p_build.add_argument("-o", "--output", help="Output APK filename/path")
+    p_build.add_argument("--package", default="com.omniapk.studio", help="Application package name")
+    p_build.add_argument("--name", default="OmniAPK Studio", help="Application display label")
+    p_build.add_argument("--version-name", default="2.0.0", help="Version name (e.g. 2.0.0)")
+    p_build.add_argument("--version-code", type=int, default=200, help="Version code integer")
+
     # Sign
     p_sign = subparsers.add_parser("sign", help="Sign APK with V1+V2 scheme")
     p_sign.add_argument("apk", help="Path to APK file")
@@ -265,6 +288,7 @@ def main():
         "diff": cmd_diff,
         "frida-gen": cmd_frida_gen,
         "gg-gen": cmd_gg_gen,
+        "build-android-app": cmd_build_android_app,
         "sign": cmd_sign,
         "ai-mod": cmd_ai_mod,
         "serve": cmd_serve,

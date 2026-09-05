@@ -27,6 +27,7 @@ from omniapk.config import (
 )
 from omniapk.core.apk_packager import ApkPackager
 from omniapk.core.apk_signer import ApkSigner
+from omniapk.core.apk_builder import AndroidAppCompiler
 from omniapk.modules.apktool import ApktoolEngine
 from omniapk.modules.apktool_m import ApktoolMEngine
 from omniapk.modules.apk_editor import ApkResourceManager, PackageCloner
@@ -176,6 +177,28 @@ async def list_available_apks():
                 except Exception:
                     pass
     return {"apks": sorted(files, key=lambda x: x["name"])}
+
+@app.post("/api/apk/compile_android_app")
+async def compile_android_app_endpoint(data: Optional[Dict[str, Any]] = None):
+    """Compile the standalone OmniAPK Studio Android app package."""
+    data = data or {}
+    pkg = data.get("package_name", "com.omniapk.studio")
+    name = data.get("app_name", "OmniAPK Studio")
+    ver = data.get("version_name", "2.0.0")
+    out_apk = OUTPUT_DIR / f"OmniAPK_Studio_v{ver}.apk"
+
+    res_path = AndroidAppCompiler.compile_apk(
+        output_apk_path=out_apk,
+        package_name=pkg,
+        app_name=name,
+        version_name=ver
+    )
+    return {
+        "success": True,
+        "apk_path": str(res_path),
+        "filename": res_path.name,
+        "size_bytes": res_path.stat().st_size
+    }
 
 @app.post("/api/apk/inspect")
 async def inspect_apk_endpoint(data: Dict[str, str]):
