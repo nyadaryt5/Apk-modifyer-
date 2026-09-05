@@ -1,0 +1,8 @@
+plugins { id 'com.android.application' }
+
+android { namespace 'com.omniapk.studio'; compileSdk 35
+    defaultConfig { applicationId 'com.omniapk.studio'; minSdk 23; targetSdk 35; versionCode 300; versionName '3.0.0' }
+}
+
+// Package the repository's responsive studio UI inside a real Android WebView.
+android.sourceSets.main.assets.srcDirs = [file('../../omniapk/web')]
