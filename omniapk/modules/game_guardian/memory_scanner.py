@@ -1,0 +1,206 @@
+"""
+Module 8: Game Guardian - Game Memory Scanner, Freezer & Speedhack Suite.
+Simulates and controls memory scanning (Dword, Float, Double, Byte, Xor),
+generates Game Guardian .lua scripts, and provides runtime speedhack hooks.
+"""
+
+import struct
+import time
+from typing import List, Dict, Any, Optional, Union
+
+class MemoryScanner:
+    """Game Guardian style RAM memory scanner & value filter."""
+
+    def __init__(self):
+        # Simulated memory regions {address: bytearray}
+        self.memory_space: bytearray = bytearray(1024 * 1024 * 4) # 4MB virtual heap for simulation
+        self.matched_addresses: List[int] = []
+        self.search_type: str = "DWORD"
+
+    def load_simulated_state(self, initial_values: Dict[int, Any], value_type: str = "DWORD"):
+        """Initialize memory space with test values."""
+        self.search_type = value_type.upper()
+        for addr, val in initial_values.items():
+            self.write_memory(addr, val, self.search_type)
+
+    def search_exact(self, value: Union[int, float], value_type: str = "DWORD") -> List[int]:
+        """Perform first exact search for value in memory."""
+        self.search_type = value_type.upper()
+        self.matched_addresses = []
+
+        if self.search_type == "DWORD":
+            target_bytes = struct.pack("<i", int(value))
+            step = 4
+        elif self.search_type == "FLOAT":
+            target_bytes = struct.pack("<f", float(value))
+            step = 4
+        elif self.search_type == "DOUBLE":
+            target_bytes = struct.pack("<d", float(value))
+            step = 8
+        elif self.search_type == "BYTE":
+            target_bytes = struct.pack("<B", int(value) & 0xFF)
+            step = 1
+        elif self.search_type == "QWORD":
+            target_bytes = struct.pack("<q", int(value))
+            step = 8
+        else:
+            target_bytes = struct.pack("<i", int(value))
+            step = 4
+
+        size = len(target_bytes)
+        for offset in range(0, len(self.memory_space) - size, step):
+            if self.memory_space[offset : offset + size] == target_bytes:
+                self.matched_addresses.append(offset)
+
+        return self.matched_addresses
+
+    def refine_search(self, new_value: Union[int, float]) -> List[int]:
+        """Refine previous search matches with updated value."""
+        if not self.matched_addresses:
+            return self.search_exact(new_value, self.search_type)
+
+        refined = []
+        for addr in self.matched_addresses:
+            cur_val = self.read_memory(addr, self.search_type)
+            if cur_val == new_value:
+                refined.append(addr)
+
+        self.matched_addresses = refined
+        return refined
+
+    def read_memory(self, address: int, value_type: str = "DWORD") -> Any:
+        """Read value at given address."""
+        v_type = value_type.upper()
+        if v_type == "DWORD":
+            return struct.unpack("<i", self.memory_space[address : address + 4])[0]
+        elif v_type == "FLOAT":
+            return round(struct.unpack("<f", self.memory_space[address : address + 4])[0], 4)
+        elif v_type == "DOUBLE":
+            return round(struct.unpack("<d", self.memory_space[address : address + 8])[0], 6)
+        elif v_type == "BYTE":
+            return self.memory_space[address]
+        elif v_type == "QWORD":
+            return struct.unpack("<q", self.memory_space[address : address + 8])[0]
+        return 0
+
+    def write_memory(self, address: int, value: Any, value_type: str = "DWORD") -> bool:
+        """Write value into target memory address."""
+        v_type = value_type.upper()
+        if v_type == "DWORD":
+            self.memory_space[address : address + 4] = struct.pack("<i", int(value))
+        elif v_type == "FLOAT":
+            self.memory_space[address : address + 4] = struct.pack("<f", float(value))
+        elif v_type == "DOUBLE":
+            self.memory_space[address : address + 8] = struct.pack("<d", float(value))
+        elif v_type == "BYTE":
+            self.memory_space[address : address + 1] = struct.pack("<B", int(value) & 0xFF)
+        elif v_type == "QWORD":
+            self.memory_space[address : address + 8] = struct.pack("<q", int(value))
+        return True
+
+    def batch_edit_matches(self, new_value: Any) -> int:
+        """Modify all currently matched addresses to new_value."""
+        count = 0
+        for addr in self.matched_addresses:
+            self.write_memory(addr, new_value, self.search_type)
+            count += 1
+        return count
+
+class GameGuardianScriptBuilder:
+    """Builds Game Guardian compatible Lua scripts."""
+
+    @staticmethod
+    def generate_lua_script(
+        game_name: str,
+        searches: List[Dict[str, Any]],
+        speedhack_speed: float = 1.0
+    ) -> str:
+        """Generate a complete Game Guardian Lua mod menu script."""
+        script_lines = [
+            f"-- Game Guardian Script for {game_name}",
+            "-- Generated by OmniAPK Studio",
+            "",
+            "gg.alert('OmniAPK Cheat Engine Activated for " + game_name + "')",
+            "",
+            "function MainMenu()",
+            "    local menu = gg.choice({",
+        ]
+
+        for i, s in enumerate(searches):
+            script_lines.append(f"        '[{i+1}] Mod {s.get('name', 'Value')} (Set to {s.get('new_val', 999999)})',")
+
+        if speedhack_speed != 1.0:
+            script_lines.append(f"        '[{len(searches)+1}] Enable Speedhack ({speedhack_speed}x)',")
+
+        script_lines.extend([
+            "        '[Exit] Close Menu'",
+            "    }, nil, 'OmniAPK Mod Studio')",
+            "",
+            "    if menu == nil then return end",
+        ])
+
+        for i, s in enumerate(searches):
+            script_lines.extend([
+                f"    if menu == {i+1} then",
+                f"        gg.clearResults()",
+                f"        gg.searchNumber('{s.get('target_val', 100)}', gg.TYPE_{s.get('type', 'DWORD').upper()})",
+                f"        local count = gg.getResultsCount()",
+                f"        if count > 0 then",
+                f"            local results = gg.getResults(count)",
+                f"            for _, res in ipairs(results) do",
+                f"                res.value = '{s.get('new_val', 999999)}'",
+                f"                res.freeze = true",
+                f"            end",
+                f"            gg.setValues(results)",
+                f"            gg.addListItems(results)",
+                f"            gg.toast('Modified ' .. count .. ' addresses to {s.get('new_val', 999999)}!')",
+                f"        else",
+                f"            gg.toast('Value not found in RAM')",
+                f"        end",
+                f"    end",
+            ])
+
+        if speedhack_speed != 1.0:
+            script_lines.extend([
+                f"    if menu == {len(searches)+1} then",
+                f"        gg.setSpeed({speedhack_speed})",
+                f"        gg.toast('Speed set to {speedhack_speed}x!')",
+                f"    end",
+            ])
+
+        script_lines.extend([
+            "end",
+            "",
+            "while true do",
+            "    if gg.isVisible() then",
+            "        gg.setVisible(false)",
+            "        MainMenu()",
+            "    end",
+            "    gg.sleep(200)",
+            "end"
+        ])
+
+        return "\n".join(script_lines)
+
+    @staticmethod
+    def generate_speedhack_frida_script(speed_multiplier: float = 2.0) -> str:
+        """Generate Frida runtime clock speed multiplier script."""
+        return f"""/*
+ * OmniAPK Speedhack Hook (Frida Script)
+ * Speed Multiplier: {speed_multiplier}x
+ */
+Java.perform(function() {{
+    var multiplier = {speed_multiplier};
+    var SystemClock = Java.use("android.os.SystemClock");
+    var baseRealtime = Date.now();
+    var baseUptime = SystemClock.uptimeMillis();
+
+    SystemClock.uptimeMillis.implementation = function() {{
+        var delta = Date.now() - baseRealtime;
+        var modified = baseUptime + (delta * multiplier);
+        return Math.floor(modified);
+    }};
+
+    console.log("[✓] OmniAPK Speedhack active: " + multiplier + "x");
+}});
+"""

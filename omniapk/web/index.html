@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OmniAPK Studio & AI Suite</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+    <div id="app" class="app-container">
+        <!-- Top Navigation Bar -->
+        <header class="top-nav">
+            <div class="logo-area">
+                <div class="logo-icon">⚡</div>
+                <div class="logo-text">
+                    <h1>OmniAPK <span class="badge-pro">STUDIO AI</span></h1>
+                    <span class="subtext">8-in-1 Android & Linux Modding Platform</span>
+                </div>
+            </div>
+
+            <!-- Global APK Selector & Platform Indicator -->
+            <div class="top-center-controls">
+                <div class="apk-selector-wrapper">
+                    <label for="currentApkSelect">Active APK:</label>
+                    <select id="currentApkSelect" class="select-styled">
+                        <option value="">Loading APKs...</option>
+                    </select>
+                    <button id="btnRefreshApks" class="btn-icon" title="Refresh APK List">🔄</button>
+                    <button id="btnUploadModal" class="btn-primary-sm">➕ Load / Upload</button>
+                </div>
+            </div>
+
+            <div class="top-right-status">
+                <div id="platformBadge" class="status-pill platform-pill">
+                    <span class="dot"></span> <span id="platformName">Detecting OS...</span>
+                </div>
+                <button id="btnOpenAiSettings" class="btn-icon-labeled" title="AI Cloud Providers & Keys">
+                    🤖 <span class="btn-label">AI Router</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace Layout -->
+        <div class="workspace-body">
+            <!-- Sidebar Navigation Tabs -->
+            <nav class="sidebar">
+                <div class="nav-section-label">AUTONOMOUS MODDING</div>
+                <button class="nav-btn active" data-tab="tab-ai-agent">
+                    <span class="nav-icon">✨</span> <span class="nav-title">Autonomous AI Agent</span>
+                </button>
+
+                <div class="nav-section-label">CORE ENGINES (8-IN-1)</div>
+                <button class="nav-btn" data-tab="tab-lucky-patcher">
+                    <span class="nav-icon">🍀</span> <span class="nav-title">Lucky Patcher Suite</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-apktool-m">
+                    <span class="nav-icon">⚡</span> <span class="nav-title">Apktool M Quick Mod</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-decompiler">
+                    <span class="nav-icon">🔍</span> <span class="nav-title">JADX & Smali Studio</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-mt-manager">
+                    <span class="nav-icon">🛠️</span> <span class="nav-title">MT Manager & Split Merger</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-apk-editor">
+                    <span class="nav-icon">📦</span> <span class="nav-title">APK Editor & Cloner</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-frida">
+                    <span class="nav-icon">💉</span> <span class="nav-title">Frida Dynamic Hook</span>
+                </button>
+                <button class="nav-btn" data-tab="tab-game-guardian">
+                    <span class="nav-icon">🎮</span> <span class="nav-title">Game Guardian Memory</span>
+                </button>
+
+                <div class="nav-section-label">COMMUNICATION & LOGS</div>
+                <button class="nav-btn" data-tab="tab-ai-chat">
+                    <span class="nav-icon">💬</span> <span class="nav-title">AI Reverse Engineering Chat</span>
+                </button>
+            </nav>
+
+            <!-- Main Content Area -->
+            <main class="content-panel">
+                
+                <!-- Tab 1: Autonomous AI Agent -->
+                <section id="tab-ai-agent" class="tab-pane active">
+                    <div class="card hero-ai-card">
+                        <div class="card-header">
+                            <div class="title-with-badge">
+                                <h2>🤖 Autonomous AI Modding Agent</h2>
+                                <span class="badge-ai">Multi-Cloud Auto-Routing</span>
+                            </div>
+                            <p class="subtitle">Give high-level natural language instructions. The AI autonomously inspects the app, patches Dalvik bytecode, strips ads, bypasses billing, modifies permissions, and rebuilds the signed APK.</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="prompt-input-group">
+                                <textarea id="agentPromptInput" rows="3" placeholder="e.g. 'Unlock all VIP and premium features by patching isPremium to return true, strip AdMob & Unity ads, bypass root detection, and sign the APK.'"></textarea>
+                                <div class="prompt-actions">
+                                    <div class="provider-select-group">
+                                        <label>AI Provider Route:</label>
+                                        <select id="agentProviderSelect" class="select-styled-sm">
+                                            <option value="">Auto-Route (Smart Fallback)</option>
+                                            <option value="groq">Groq (Llama 3.3 70B Fast)</option>
+                                            <option value="openai">OpenAI (GPT-4o)</option>
+                                            <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
+                                            <option value="gemini">Google Gemini (1.5 Flash/Pro)</option>
+                                            <option value="deepseek">DeepSeek (V3 / R1)</option>
+                                            <option value="custom">Custom Endpoint / Local Ollama</option>
+                                        </select>
+                                    </div>
+                                    <button id="btnRunAgentTask" class="btn-primary">
+                                        <span class="btn-icon">⚡</span> Execute Autonomous Mod
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Agent Live Progress & Step Tracker -->
+                            <div id="agentLiveProgress" class="agent-progress-box hidden">
+                                <div class="progress-bar-container">
+                                    <div id="agentProgressBar" class="progress-bar-fill" style="width: 0%"></div>
+                                </div>
+                                <div class="progress-status-row">
+                                    <span id="agentCurrentStep" class="status-step">Initializing...</span>
+                                    <span id="agentPercent" class="status-percent">0%</span>
+                                </div>
+                                <div id="agentLiveLog" class="agent-live-log-box"></div>
+                            </div>
+
+                            <!-- Final Result Download Banner -->
+                            <div id="agentResultBanner" class="result-banner hidden">
+                                <div class="result-left">
+                                    <div class="check-icon">✓</div>
+                                    <div>
+                                        <h3 id="resultTitle">Modded APK Ready!</h3>
+                                        <p id="resultSubtitle">Signed with V1+V2 Scheme & 4-Byte ZipAligned.</p>
+                                    </div>
+                                </div>
+                                <div class="result-right">
+                                    <a id="btnDownloadModdedApk" href="#" class="btn-success" download>
+                                        📥 Download Modded APK
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Preset Modding Buttons -->
+                    <div class="presets-section">
+                        <h3>⚡ One-Tap AI Mod Presets</h3>
+                        <div class="preset-grid">
+                            <div class="preset-card" onclick="setPresetPrompt('Unlock All Premium/VIP Features, force subscriptions to true, and sign the APK')">
+                                <div class="preset-icon">💎</div>
+                                <h4>VIP & Pro Unlocker</h4>
+                                <p>Forces isPremium(), isVip(), and subscription checks to true.</p>
+                            </div>
+                            <div class="preset-card" onclick="setPresetPrompt('Remove all AdMob, Unity, AppLovin ad activities, banners, and interstitials from bytecode & manifest')">
+                                <div class="preset-icon">🚫</div>
+                                <h4>Total Ad Elimination</h4>
+                                <p>Neutralizes ad view loaders and strips advertising permissions.</p>
+                            </div>
+                            <div class="preset-card" onclick="setPresetPrompt('Bypass root detection, Magisk checks, emulator tests, and tamper verification')">
+                                <div class="preset-icon">🛡️</div>
+                                <h4>Anti-Root & Anti-Ban</h4>
+                                <p>Spoofs isRooted() and isEmulator() to return false.</p>
+                            </div>
+                            <div class="preset-card" onclick="setPresetPrompt('Full Overhaul: Remove all ads, unlock VIP, enable debuggable flag, remove tracking permissions, and sign')">
+                                <div class="preset-icon">🔥</div>
+                                <h4>God Mode All-in-One</h4>
+                                <p>Combines VIP unlock, Ad stripping, root bypass, and signing.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab 2: Lucky Patcher Suite -->
+                <section id="tab-lucky-patcher" class="tab-pane">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>🍀 Lucky Patcher Multi-Pattern Engine</h2>
+                            <p class="subtitle">Automated Dalvik opcode heuristic patchers for In-App Purchases, Ads, and License Verification.</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="toggle-list">
+                                <label class="toggle-item">
+                                    <input type="checkbox" id="lpRemoveAds" checked>
+                                    <div class="toggle-info">
+                                        <strong>Remove Google AdMob, Unity, AppLovin Ads</strong>
+                                        <span>Stubs showAd/loadAd bytecode and disables ad manifest activities.</span>
+                                    </div>
+                                </label>
+                                <label class="toggle-item">
+                                    <input type="checkbox" id="lpBypassBilling" checked>
+                                    <div class="toggle-info">
+                                        <strong>Bypass Google Play In-App Billing (v2 - v7)</strong>
+                                        <span>Hooks IInAppBillingService and forces isPremium / isPurchased getters.</span>
+                                    </div>
+                                </label>
+                                <label class="toggle-item">
+                                    <input type="checkbox" id="lpBypassLicense" checked>
+                                    <div class="toggle-info">
+                                        <strong>Bypass Android LVL License Verification</strong>
+                                        <span>Neutralizes LicenseChecker and automatically allows license checks.</span>
+                                    </div>
+                                </label>
+                                <label class="toggle-item">
+                                    <input type="checkbox" id="lpBypassRoot" checked>
+                                    <div class="toggle-info">
+                                        <strong>Neutralize Root & Emulator Detection</strong>
+                                        <span>Forces isRooted(), isDeviceRooted(), and isEmulator() to return False.</span>
+                                    </div>
+                                </label>
+                                <label class="toggle-item">
+                                    <input type="checkbox" id="lpAutoSign" checked>
+                                    <div class="toggle-info">
+                                        <strong>Auto Sign with V1 + V2 Test Key</strong>
+                                        <span>Generates valid cryptographic signatures and zipaligns output.</span>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="action-footer">
+                                <button id="btnRunLuckyPatch" class="btn-primary">
+                                    🍀 Apply Selected Lucky Patches
+                                </button>
+                            </div>
+                            <div id="luckyPatchResult" class="patch-result-box hidden"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab 3: Apktool M Quick Mod -->
+                <section id="tab-apktool-m" class="tab-pane">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>⚡ Apktool M - Fast In-Place Manifest & Signature Modder</h2>
+                            <p class="subtitle">Direct in-memory patching of AndroidManifest.xml and signature killer without full project decompile.</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Package Name (Clone / Override):</label>
+                                    <input type="text" id="mPackageName" placeholder="e.g. com.target.sampleapp.mod">
+                                </div>
+                                <div class="form-group">
+                                    <label>Debuggable Mode:</label>
+                                    <select id="mDebuggable" class="select-styled">
+                                        <option value="">Keep Original</option>
+                                        <option value="true">Force True (Enable ADB Debugging)</option>
+                                        <option value="false">Force False</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="checkbox-group">
+                                <label><input type="checkbox" id="mStripAdPerms" checked> Strip Advertising Permissions (AD_ID, ADSERVICES)</label>
+                                <label><input type="checkbox" id="mStripDangerousPerms"> Strip High-Risk Permissions (READ_PHONE_STATE, SMS, Location)</label>
+                            </div>
+                            <div class="action-footer">
+                                <button id="btnRunApktoolM" class="btn-primary">⚡ Execute In-Place Quick Edit</button>
+                            </div>
+                            <div id="apktoolMResult" class="patch-result-box hidden"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab 4: JADX & Smali Studio -->
+                <section id="tab-decompiler" class="tab-pane">
+                    <div class="card code-studio-card">
+                        <div class="card-header flex-between">
+                            <div>
+                                <h2>🔍 JADX & Smali Code Studio</h2>
+                                <p class="subtitle">Decompile Dalvik bytecode into high-level Java or Smali assembly, search XREFs, and edit methods.</p>
+                            </div>
+                            <div class="header-tools">
+                                <button id="btnDecompileFull" class="btn-secondary">Decompile Active APK</button>
+                            </div>
+                        </div>
+                        <div class="card-body code-studio-layout">
+                            <div class="code-sidebar">
+                                <div class="code-search-box">
+                                    <input type="text" id="codeSearchInput" placeholder="Search methods, strings, classes...">
+                                    <button id="btnSearchXref" class="btn-icon">🔍</button>
+                                </div>
+                                <div id="codeFileTree" class="file-tree-container">
+                                    <p class="placeholder-text">Click "Decompile Active APK" to load classes.</p>
+                                </div>
+                            </div>
+                            <div class="code-viewer-panel">
+                                <div class="code-viewer-header">
+                                    <span id="currentOpenedFile" class="file-path-pill">No file opened</span>
+                                    <div class="code-actions">
+                                        <button id="btnPatchMethodReturnTrue" class="btn-primary-sm">Force Return True</button>
+                                        <button id="btnPatchMethodReturnFalse" class="btn-secondary-sm">Force Return False</button>
+                                    </div>
+                                </div>
+                                <pre id="codeDisplayArea" class="code-editor"><code>// Select a class or decompile the active APK to inspect Java/Smali code...</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab 5: MT Manager & Split Merger -->
+                <section id="tab-mt-manager" class="tab-pane">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>🛠️ MT Manager Suite - Anti-Split Merger & Multi-DEX Regex</h2>
+                            <p class="subtitle">Convert split APK sets (.apks / .xapk / splits) into a unified standalone APK and batch patch regex across all DEX files.</p>
+                        </div>
+                        <div class="card-body">
+                            <!-- Anti-Split Merger -->
+                            <div class="sub-tool-box">
+                                <h3>🔄 Anti-Split APK Merger</h3>
+                                <p>Select split APKs or a bundle archive to merge into a single standalone installable APK.</p>
+                                <div class="split-input-row">
+                                    <input type="text" id="splitApkInput" placeholder="Comma separated APK paths (e.g. base.apk, split_config.arm64.apk)">
+                                    <button id="btnMergeSplits" class="btn-primary">Merge to Standalone APK</button>
+                                </div>
+                                <div id="splitMergeResult" class="patch-result-box hidden"></div>
+                            </div>
+
+                            <!-- Batch Regex Patcher -->
+                            <div class="sub-tool-box mt-4">
+                                <h3>⚡ Multi-DEX Batch Regex Search & Replace</h3>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Search Pattern (Regex or String):</label>
+                                        <input type="text" id="regexSearchPattern" placeholder="e.g. isPremium|isSubscribed">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Replacement String (Optional):</label>
+                                        <input type="text" id="regexReplaceStr" placeholder="e.g. isAlwaysTrue">
+                                    </div>
+                                </div>
+                                <button id="btnExecuteBatchRegex" class="btn-secondary">Execute Batch Multi-DEX Patcher</button>
+                                <div id="batchRegexResult" class="patch-result-box hidden"></div>
+                            </div>
+
+                            <!-- APK Differ -->
+                            <div class="sub-tool-box mt-4">
+                                <h3>📊 APK Diff Engine (Compare 2 APKs)</h3>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Original APK (A):</label>
+                                        <input type="text" id="diffApkA" placeholder="Path to original.apk">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Modded / Target APK (B):</label>
+                                        <input type="text" id="diffApkB" placeholder="Path to modded.apk">
+                                    </div>
+                                </div>
+                                <button id="btnRunApkDiff" class="btn-secondary">Compare APKs</button>
+                                <div id="apkDiffResult" class="patch-result-box hidden"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab 6: APK Editor & Cloner -->
+                <section id="tab-apk-editor" class="tab-pane">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>📦 APK Editor & Resource Explorer</h2>
+                            <p class="subtitle">Browse assets, raw strings, drawables, audio files, and clone packages.</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="editor-sub-tabs">
+                                <button class="btn-tab-pill active" onclick="loadResourcesCategory('all')">All Resources</button>
+                                <button class="btn-tab-pill" onclick="loadResourcesCategory('assets')">Assets</button>
+                                <button class="btn-tab-pill" onclick="loadResourcesCategory('drawables')">Drawables</button>
+                                <button class="btn-tab-pill" onclick="loadResourcesCategory('audio')">Audio</button>
+                                <button class="btn-tab-pill" onclick="loadResourcesCategory('configs')">JSON / Configs</button>
+                            </div>
+                            <div id="resourceListTable" class="resource-table-container">
+                                <p class="placeholder-text">Loading APK resources...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab 7: Frida Dynamic Hook -->
+                <section id="tab-frida" class="tab-pane">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>💉 Frida Dynamic Instrumentation Generator</h2>
+                            <p class="subtitle">Generate universal SSL Pinning bypass, root detection hide, and custom runtime method hooks.</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Target Class (Optional):</label>
+                                    <input type="text" id="fridaClass" placeholder="e.g. com.target.app.MainActivity">
+                                </div>
+                                <div class="form-group">
+                                    <label>Target Method (Optional):</label>
+                                    <input type="text" id="fridaMethod" placeholder="e.g. isPremium">
+                                </div>
+                                <div class="form-group">
+                                    <label>Override Return Value (Optional):</label>
+                                    <input type="text" id="fridaReturn" placeholder="e.g. true, 999999, 'VIP_TOKEN'">
+                                </div>
+                            </div>
+                            <div class="action-footer">
+                                <button id="btnGenerateFridaScript" class="btn-primary">Generate Frida Scripts</button>
+                            </div>
+                            <div class="frida-scripts-output mt-4">
+                                <h3>Generated Frida JavaScript Payload:</h3>
+                                <pre id="fridaCodeOutput" class="code-editor"><code>// Click "Generate Frida Scripts" to build dynamic hooks...</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab 8: Game Guardian Memory Engine -->
+                <section id="tab-game-guardian" class="tab-pane">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>🎮 Game Guardian Memory Engine & Speedhack</h2>
+                            <p class="subtitle">Scan process RAM memory, freeze values (coins/gems/score), and generate Game Guardian Lua scripts.</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="memory-search-row">
+                                <div class="form-group">
+                                    <label>Search Value:</label>
+                                    <input type="number" id="ggSearchVal" value="100">
+                                </div>
+                                <div class="form-group">
+                                    <label>Data Type:</label>
+                                    <select id="ggSearchType" class="select-styled">
+                                        <option value="DWORD">DWORD (Integer 32)</option>
+                                        <option value="FLOAT">FLOAT</option>
+                                        <option value="DOUBLE">DOUBLE</option>
+                                        <option value="BYTE">BYTE</option>
+                                        <option value="QWORD">QWORD (Integer 64)</option>
+                                    </select>
+                                </div>
+                                <button id="btnGgFirstSearch" class="btn-primary">🔍 First Search</button>
+                                <button id="btnGgRefine" class="btn-secondary">🎯 Refine Search</button>
+                            </div>
+                            <div class="memory-edit-row mt-4">
+                                <div class="form-group">
+                                    <label>New Value to Write / Freeze:</label>
+                                    <input type="number" id="ggNewVal" value="999999">
+                                </div>
+                                <button id="btnGgWriteAll" class="btn-success">✏️ Batch Write All Matches</button>
+                                <button id="btnGgGenerateLua" class="btn-secondary">📜 Export GG Lua Script</button>
+                            </div>
+                            <div id="ggSearchResults" class="patch-result-box hidden"></div>
+                            <div id="ggLuaScriptBox" class="mt-4 hidden">
+                                <h3>Generated Game Guardian .lua Cheat Script:</h3>
+                                <pre id="ggLuaCode" class="code-editor"><code></code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab 9: AI Reverse Engineering Chat -->
+                <section id="tab-ai-chat" class="tab-pane">
+                    <div class="card chat-card">
+                        <div class="card-header">
+                            <h2>💬 Multi-Cloud AI Reverse Engineering Assistant</h2>
+                            <p class="subtitle">Ask technical questions, analyze decompiled algorithms, request custom smali hooks, and bypass obfuscation.</p>
+                        </div>
+                        <div class="card-body chat-layout">
+                            <div id="aiChatMessages" class="chat-messages-container">
+                                <div class="chat-bubble ai">
+                                    <div class="bubble-header">🤖 OmniAI Assistant</div>
+                                    <p>Hello! I am your AI Reverse Engineering copilot. You can ask me to analyze Dalvik opcodes, construct custom Frida hooks, de-obfuscate methods, or automate complex APK modifications.</p>
+                                </div>
+                            </div>
+                            <div class="chat-input-row">
+                                <input type="text" id="aiChatInput" placeholder="Ask AI: 'How do I bypass Flutter SSL Pinning?' or 'Decompile isSubscribed()...'">
+                                <button id="btnSendAiChat" class="btn-primary">Send</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+
+        <!-- Terminal & WebSocket Event Console Footer -->
+        <footer class="console-footer">
+            <div class="console-header">
+                <span>📡 Live Engine & AI Stream Logs</span>
+                <button id="btnClearConsole" class="btn-icon-sm">Clear</button>
+            </div>
+            <div id="consoleOutput" class="console-body">
+                <p class="log-line info">[System] OmniAPK Studio initialized. Ready on Linux and Android (Termux).</p>
+            </div>
+        </footer>
+
+        <!-- AI Cloud Settings Modal -->
+        <div id="aiSettingsModal" class="modal-overlay hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>🤖 AI Multi-Cloud Providers & Key Pool Settings</h3>
+                    <button class="btn-close-modal" onclick="closeAiModal()">✖</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-desc">Configure multiple API keys across providers. The engine automatically rotates keys, auto-routes requests, and <strong>gracefully waits on rate limits (429) without crashing tasks</strong>.</p>
+                    <div class="provider-key-list">
+                        <div class="key-field-group">
+                            <label>Groq API Keys (Comma separated for key pool):</label>
+                            <input type="password" id="keyGroq" placeholder="gsk_••••••••••••••••••••••••">
+                        </div>
+                        <div class="key-field-group">
+                            <label>OpenAI API Keys (GPT-4o / o1 / o3):</label>
+                            <input type="password" id="keyOpenAI" placeholder="sk-proj-••••••••••••••••••••••••">
+                        </div>
+                        <div class="key-field-group">
+                            <label>Anthropic Claude API Keys (Claude 3.5):</label>
+                            <input type="password" id="keyAnthropic" placeholder="sk-ant-••••••••••••••••••••••••">
+                        </div>
+                        <div class="key-field-group">
+                            <label>Google Gemini API Keys (1.5 Pro / Flash):</label>
+                            <input type="password" id="keyGemini" placeholder="AIzaSy••••••••••••••••••••••••">
+                        </div>
+                        <div class="key-field-group">
+                            <label>DeepSeek API Keys (V3 / R1):</label>
+                            <input type="password" id="keyDeepSeek" placeholder="sk-••••••••••••••••••••••••">
+                        </div>
+                        <div class="key-field-group">
+                            <label>Custom API Endpoint / Local Ollama Base URL:</label>
+                            <input type="text" id="customBaseUrl" placeholder="http://localhost:11434/v1">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeAiModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveAiSettings()">Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload APK Modal -->
+        <div id="uploadModal" class="modal-overlay hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>➕ Upload or Select APK</h3>
+                    <button class="btn-close-modal" onclick="closeUploadModal()">✖</button>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-dropzone" id="uploadDropzone">
+                        <input type="file" id="apkFileInput" accept=".apk,.apks,.xapk" style="display:none">
+                        <div class="dropzone-content" onclick="document.getElementById('apkFileInput').click()">
+                            <span class="upload-icon">📁</span>
+                            <h4>Drag & Drop APK here or click to browse</h4>
+                            <p>Supports .apk, .apks, and .xapk files</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+</body>
+</html>
