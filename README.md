@@ -113,14 +113,29 @@ behaves behind a proxy or port forward.
 
 ## Signing
 
-`apkmod sign` writes a v1 (JAR) signature natively — `MANIFEST.MF`, `.SF` and a
-PKCS#7 `.RSA` — with the RSA math done in Python. Android 11+ also wants a v2/v3
-signature, so for anything you intend to distribute, sign with `apksigner`
-afterwards; `apkmod verify` will tell you which schemes are present.
+`apkmod signers` shows what can sign on this machine:
+
+```
+[absent] apksigner            schemes: v1, v2, v3, v4   (Android SDK build-tools)
+[absent] uber-apk-signer      schemes: v1, v2, v3       (uber-apk-signer.jar)
+[ready ] native (pure Python) schemes: v1               (always available)
+```
+
+`--engine auto` (the default) uses apksigner when it is installed, then
+uber-apk-signer, then falls back to the native signer. The native path writes a
+v1 (JAR) signature itself — `MANIFEST.MF`, `.SF` and a PKCS#7 `.RSA` — with the
+RSA and DER done in Python, so it works with no SDK and no JVM.
 
 ```bash
 apkmod sign app.apk -o signed.apk --keystore release.p12 --storepass secret
+apkmod sign app.apk -o signed.apk --key k.pem --cert c.pem --engine native
+apkmod verify signed.apk        # v1 validity + which schemes are present
 ```
+
+Android 11+ also wants a v2/v3 signature. With no build-tools available the
+native signer can only produce v1, and it says so rather than implying
+otherwise — install build-tools (or drop `uber-apk-signer.jar` in the cache) for
+full scheme coverage. `verify` reports exactly which schemes a file carries.
 
 JKS keystores are not read directly; convert once with
 `keytool -importkeystore -srckeystore my.jks -destkeystore my.p12 -deststoretype PKCS12`.
@@ -134,7 +149,7 @@ apkmod/
   dex.py       DEX header / string table (MUTF-8) for SDK and integrity greps
   apk.py       container inventory, APK Signing Block (v2/v3) detection
   align.py     native zipalign: pads the local header extra field
-  signing.py   native v1 signer/verifier + keystore handling
+  signing.py   native v1 signer/verifier, backend selection, keystore handling
   asn1.py      the slice of DER needed for X.509, RSA and PKCS#7
   analyze.py   static analysis report
   smali.py     search / replace / integrity findings on a decoded tree
@@ -153,16 +168,21 @@ pip install -e '.[dev]'
 pytest
 ```
 
-112 tests. The fixtures in `tests/fixture.py` are hand-encoded from the format
+128 tests. The fixtures in `tests/fixture.py` are hand-encoded from the format
 specifications and do **not** import `apkmod`, so the binary parsers are checked
 against a second implementation rather than against themselves. The signing
 tests also hand the signature to the `openssl` command line for independent
 verification, and confirm OpenSSL rejects a tampered one.
 
-What is *not* covered: the `apktool` and `apktool-m` engines are only exercised
-in their "backend missing" paths here, because the sandbox has no apktool jar
-and no device. Their failure messages and command construction are tested; a
-real decode/build round trip is not.
+What is *not* covered here, because this sandbox has neither the backend nor a
+device:
+
+- the `apktool` and `apktool-m` engines are exercised only in their
+  "backend missing" paths — failure messages and command construction are
+  tested, a real decode/build round trip is not
+- apksigner / uber-apk-signer delegation is tested by asserting the exact
+  command line that gets built and the graceful failure when they are absent;
+  no real v2/v3 signature was produced in this environment
 
 ## Licence
 

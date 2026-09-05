@@ -228,6 +228,39 @@ def test_genkey(capsys, tmp_path):
     assert (tmp_path / "keys" / "apkmod-cert.pem").is_file()
 
 
+def test_signers_command(capsys):
+    assert main(["signers"]) == 0
+    out = _out(capsys)
+    assert "apksigner" in out and "uber-apk-signer" in out
+    assert "native (pure Python)" in out
+
+
+def test_signers_json(capsys):
+    assert main(["signers", "--json"]) == 0
+    names = [s["name"] for s in json.loads(_out(capsys))]
+    assert "apksigner" in names
+
+
+def test_sign_reports_engine_and_schemes(capsys, apk, tmp_path, signing_material):
+    key_path = tmp_path / "key.pem"
+    cert_path = tmp_path / "cert.pem"
+    key_path.write_bytes(signing_material[0])
+    cert_path.write_bytes(signing_material[1])
+    assert main(
+        ["sign", str(apk), "-o", str(tmp_path / "s.apk"),
+         "--engine", "native", "--key", str(key_path), "--cert", str(cert_path)]
+    ) == 0
+    out = _out(capsys)
+    assert "engine  : native" in out
+    assert "schemes : v1" in out
+    assert "Android 11+ also wants v2/v3" in out
+
+
+def test_sign_needs_material(capsys, apk, tmp_path):
+    assert main(["sign", str(apk), "-o", str(tmp_path / "s.apk")]) == 2
+    assert "provide --key/--cert" in capsys.readouterr().err
+
+
 def test_verify_unsigned_apk(capsys, apk):
     assert main(["verify", str(apk)]) == 1
     assert "v1 signature : ABSENT" in _out(capsys)

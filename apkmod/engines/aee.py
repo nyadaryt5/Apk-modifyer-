@@ -16,7 +16,7 @@ from ..align import repack, verify_alignment
 from ..apk import ApkContainer
 from ..arsc import ArscFile
 from ..axml import AxmlFile
-from ..signing import sign_v1
+from ..signing import sign
 from ..util import ApkModError
 from .base import Engine, EngineStatus
 
@@ -220,15 +220,25 @@ class NativeEditor(Engine):
         )
 
     # -- signing ----------------------------------------------------------
-    def sign(self, apk: Path, out: Path, key_pem: bytes, cert_pem: bytes, *, name: str = "APKMOD") -> EditResult:
-        signed = sign_v1(apk, out, key_pem, cert_pem, signature_name=name)
+    def sign(
+        self,
+        apk: Path,
+        out: Path,
+        key_pem: bytes,
+        cert_pem: bytes,
+        *,
+        name: str = "APKMOD",
+        engine: str = "auto",
+    ) -> EditResult:
+        """Sign via the best available backend (apksigner when present, else native v1)."""
+        outcome = sign(apk, out, engine=engine, key_pem=key_pem, cert_pem=cert_pem, signature_name=name)
         return EditResult(
-            path=signed.path,
-            changed_entries=[signed.signature_name, "META-INF/MANIFEST.MF"],
+            path=outcome.path,
+            changed_entries=["META-INF/MANIFEST.MF"],
             notes=[
-                f"v1 signed {signed.signed_entries} entries with {signed.digest_name}",
-                f"certificate: {signed.subject or 'unknown'} ({signed.certificate_sha256[:16]}...)",
+                f"signed with {outcome.engine}: {', '.join(outcome.schemes) or 'no scheme detected'}",
+                f"certificate: {outcome.subject or 'unknown'} ({(outcome.certificate_sha256 or '')[:16]}...)",
             ],
             signed=True,
-            aligned_misalignments=len(verify_alignment(signed.path)),
+            aligned_misalignments=len(verify_alignment(outcome.path)),
         )

@@ -13,12 +13,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from .apk import ApkContainer
 from .asn1 import ApkModError
 from .dex import iter_dex_strings
-from .util import human_size
 
 __all__ = ["analyze_apk", "SDK_SIGNATURES", "DANGEROUS_PERMISSIONS"]
 

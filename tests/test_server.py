@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
 import threading
 import uuid
 import zipfile
@@ -135,6 +136,55 @@ def test_action_replace_string(server, apk):
 
     with ApkContainer(_store.path(result["id"])) as container:
         assert ArscFile.parse(container.read("resources.arsc")).app_label() == "UI App"
+
+
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="openssl is not installed")
+def test_sign_action(server, apk, tmp_path):
+    """The UI's Sign button must produce a signature that actually verifies."""
+    from apkmod.signing import verify_v1
+
+    base, store = server
+    file_id = _upload(base + "/api/upload", apk)["id"]
+
+    status, result = _post_json(f"{base}/api/apk/{file_id}/action", {"action": "sign"})
+    assert status == 200
+    assert any("signed with native" in n for n in result["notes"]), result["notes"]
+    # a sign action must not also claim the file was left unsigned
+    assert not any("not re-signed" in n for n in result["notes"]), result["notes"]
+
+    downloaded = tmp_path / "ui-signed.apk"
+    status, data = _get(f"{base}/api/download/{result['id']}")
+    downloaded.write_bytes(data)
+    check = verify_v1(downloaded)
+    assert check.ok is True, check.problems
+    assert check.subject == "APK Modifyer UI"
+
+
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="openssl is not installed")
+def test_edit_with_autosign(server, apk, tmp_path):
+    """An edit plus sign:true must leave a verifiable signature behind."""
+    from apkmod.signing import verify_v1
+
+    base, store = server
+    file_id = _upload(base + "/api/upload", apk)["id"]
+
+    status, result = _post_json(
+        f"{base}/api/apk/{file_id}/action",
+        {"action": "set-debuggable", "enabled": True, "sign": True},
+    )
+    assert status == 200
+    assert any("re-signed with" in n for n in result["notes"]), result["notes"]
+
+    status, data = _get(f"{base}/api/download/{result['id']}")
+    downloaded = tmp_path / "ui-debug-signed.apk"
+    downloaded.write_bytes(data)
+    assert verify_v1(downloaded).ok is True
+
+    # and the manifest edit really took effect
+    from apkmod.apk import ApkContainer
+
+    with ApkContainer(downloaded) as container:
+        assert container.manifest_axml().manifest_facts()["debuggable"] is True
 
 
 def test_unknown_action_is_rejected(server, apk):

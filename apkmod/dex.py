@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import struct
 from dataclasses import dataclass, field
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
 from .util import ApkModError
 

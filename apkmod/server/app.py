@@ -22,7 +22,7 @@ from ..asn1 import ApkModError
 from ..engines import registry
 from ..engines.aee import NativeEditor
 from ..engines.patcher import PatcherEngine
-from ..signing import generate_key, sign_v1
+from ..signing import generate_key, sign
 from ..util import work_dir
 
 __all__ = ["serve", "build_handler", "Store"]
@@ -390,8 +390,10 @@ def build_handler(store: Store):
                 key_dir = store.root / "keys"
                 key, cert = generate_key(key_dir, common_name="APK Modifyer UI")
                 out = store.root / f"tmp-{uuid.uuid4().hex[:8]}.apk"
-                signed = sign_v1(apk, out, key.read_bytes(), cert.read_bytes())
-                notes.append(f"v1 signed {signed.signed_entries} entries ({signed.subject})")
+                outcome = sign(apk, out, engine="auto", key_pem=key.read_bytes(), cert_pem=cert.read_bytes())
+                notes.append(
+                    f"signed with {outcome.engine}: {', '.join(outcome.schemes) or 'no scheme detected'} ({outcome.subject})"
+                )
             else:
                 raise ApkModError(f"unknown action '{action}'")
 
@@ -407,12 +409,20 @@ def build_handler(store: Store):
                 if not key.is_file():
                     key, cert = generate_key(key_dir)
                 signed_path = store.root / f"tmp-{uuid.uuid4().hex[:8]}.apk"
-                signed = sign_v1(store.path(new_id), signed_path, key.read_bytes(), cert.read_bytes())
+                outcome = sign(
+                    store.path(new_id),
+                    signed_path,
+                    engine="auto",
+                    key_pem=key.read_bytes(),
+                    cert_pem=cert.read_bytes(),
+                )
                 data = signed_path.read_bytes()
                 signed_path.unlink(missing_ok=True)
                 new_id = store.put(data, f"{stem}-{action}-signed.apk")
-                notes.append(f"re-signed with a v1 signature ({signed.subject})")
-            else:
+                notes.append(
+                    f"re-signed with {outcome.engine}: {', '.join(outcome.schemes) or 'no scheme detected'}"
+                )
+            elif action != "sign":
                 notes.append("not re-signed - install will fail until you sign it")
 
             return {"id": new_id, "name": store.name(new_id), "notes": notes, "size": len(data)}

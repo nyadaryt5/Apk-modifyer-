@@ -10,7 +10,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 from . import __version__, align, analyze, signing, smali
 from .apk import ApkContainer
@@ -112,6 +112,8 @@ def cmd_doctor(args) -> int:
     ready = [s.name for s in statuses if s.available]
     print()
     print(f"ready: {', '.join(ready) if ready else 'none'}")
+    signers = [s for s in signing.signer_statuses() if s.available]
+    print(f"signing backends: {', '.join(s.name for s in signers) or 'native only'}")
     print(ETHICS_NOTE)
     return 0
 
@@ -208,17 +210,52 @@ def cmd_align(args) -> int:
 
 
 def cmd_sign(args) -> int:
-    key_pem, cert_pem = _material(args)
-    result = signing.sign_v1(
-        Path(args.apk), Path(args.out), key_pem, cert_pem, signature_name=args.name, digest=args.digest
+    keystore = getattr(args, "keystore", None)
+    if keystore is None and not (args.key and args.cert):
+        raise ApkModError("provide --key/--cert, or --keystore with --storepass")
+    key_pem = cert_pem = None
+    if args.key and args.cert:
+        key_pem, cert_pem = signing.load_material(key=args.key, cert=args.cert)
+    outcome = signing.sign(
+        Path(args.apk),
+        Path(args.out),
+        engine=args.engine,
+        key_pem=key_pem,
+        cert_pem=cert_pem,
+        keystore=keystore,
+        storepass=args.storepass or "",
+        alias=args.alias,
+        digest=args.digest,
+        signature_name=args.name,
     )
-    print(f"signed -> {result.path}")
-    print(f"  entries : {result.signed_entries}")
-    print(f"  digest  : {result.digest_name}")
-    print(f"  cert    : {result.subject or 'unknown'} ({result.certificate_sha256[:32]}...)")
-    check = signing.verify_v1(result.path)
+    print(f"signed -> {outcome.path}")
+    print(f"  engine  : {outcome.engine}")
+    print(f"  schemes : {', '.join(outcome.schemes) or 'none detected'}")
+    print(f"  cert    : {outcome.subject or 'unknown'} ({(outcome.certificate_sha256 or '')[:32]}...)")
+    for note in outcome.notes:
+        print(f"  note    : {note}")
+    check = signing.verify_v1(outcome.path)
     print(f"  verify  : {'OK' if check.ok else 'FAILED - ' + '; '.join(check.problems[:3])}")
+    if outcome.engine == "native" and "v2" not in outcome.schemes:
+        print("  hint    : v1 only - Android 11+ also wants v2/v3 (install build-tools for apksigner)")
     return 0 if check.ok else 1
+
+
+def cmd_signers(args) -> int:
+    statuses = signing.signer_statuses()
+    if getattr(args, "json", False):
+        print(json.dumps([s.as_dict() for s in statuses], indent=2))
+        return 0
+    for status in statuses:
+        flag = "ready " if status.available else "absent"
+        print(f"[{flag}] {status.name}")
+        if status.version:
+            print(f"         version : {status.version}")
+        if status.location:
+            print(f"         location: {status.location}")
+        print(f"         schemes : {', '.join(status.schemes)}")
+        print(f"         note    : {status.note}")
+    return 0
 
 
 def cmd_verify(args) -> int:
@@ -433,13 +470,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-page-align", action="store_true", help="do not page-align .so entries")
     p.set_defaults(func=cmd_align)
 
-    p = sub.add_parser("sign", help="sign an APK (native v1, or apksigner if present)")
+    p = sub.add_parser("sign", help="sign an APK (apksigner/uber-apk-signer when present, else native v1)")
     p.add_argument("apk")
     p.add_argument("-o", "--out", required=True)
     p.add_argument("--name", default="APKMOD", help="META-INF block name")
     p.add_argument("--digest", default="sha-256", choices=["sha-256", "sha-512"])
+    p.add_argument(
+        "--engine", default="auto", choices=["auto", "native", "apksigner", "uber"],
+        help="auto prefers apksigner for v2/v3 coverage, then falls back to native v1",
+    )
     _add_signing_options(p)
     p.set_defaults(func=cmd_sign)
+
+    p = sub.add_parser("signers", help="show which signing backends are available")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_signers)
 
     p = sub.add_parser("verify", help="verify a v1 signature")
     p.add_argument("apk")

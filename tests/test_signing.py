@@ -11,7 +11,7 @@ import pytest
 from apkmod.align import repack
 from apkmod.asn1 import parse_pkcs7_signed_data
 from apkmod.signing import sign_v1, verify_v1
-from apkmod.util import ApkModError, run
+from apkmod.util import ApkModError, ToolResult, run
 
 OPENSSL = shutil.which("openssl")
 
@@ -158,3 +158,118 @@ def test_material_requires_a_source(apk):
 
     with pytest.raises(ApkModError, match="provide --key/--cert"):
         load_material()
+
+
+# ==========================================================================
+# backend selection
+# ==========================================================================
+def test_signer_statuses_shape():
+    from apkmod.signing import signer_statuses
+
+    statuses = {s.name: s for s in signer_statuses()}
+    assert "apksigner" in statuses and "uber-apk-signer" in statuses
+    assert statuses["native (pure Python)"].available is True
+    assert statuses["native (pure Python)"].schemes == ("v1",)
+    assert "v2" in statuses["apksigner"].schemes
+
+
+def test_auto_falls_back_to_native_when_no_sdk(apk, tmp_path, signing_material, monkeypatch):
+    """No apksigner and no uber jar here, so auto must land on the native signer."""
+    from apkmod import signing as signing_mod
+
+    monkeypatch.setattr(signing_mod, "find_apksigner", lambda: None)
+    monkeypatch.setattr(signing_mod, "find_uber_signer_jar", lambda: None)
+    outcome = signing_mod.sign(apk, tmp_path / "auto.apk", engine="auto", key_pem=signing_material[0], cert_pem=signing_material[1])
+    assert outcome.engine == "native"
+    assert outcome.schemes == ["v1"]
+    assert verify_v1(outcome.path).ok is True
+
+
+def test_explicit_native_engine(apk, tmp_path, signing_material):
+    from apkmod import signing as signing_mod
+
+    outcome = signing_mod.sign(
+        apk, tmp_path / "n.apk", engine="native", key_pem=signing_material[0], cert_pem=signing_material[1]
+    )
+    assert outcome.engine == "native"
+    assert any("v1 signed" in n for n in outcome.notes)
+
+
+def test_unknown_engine_rejected(apk, tmp_path, signing_material):
+    from apkmod import signing as signing_mod
+
+    with pytest.raises(ApkModError, match="unknown signing engine"):
+        signing_mod.sign(
+            apk, tmp_path / "x.apk", engine="magic", key_pem=signing_material[0], cert_pem=signing_material[1]
+        )
+
+
+def test_apksigner_engine_reports_when_absent(apk, tmp_path, signing_material, monkeypatch):
+    from apkmod import signing as signing_mod
+
+    monkeypatch.setattr(signing_mod, "find_apksigner", lambda: None)
+    with pytest.raises(ApkModError, match="apksigner is not installed"):
+        signing_mod.sign(
+            apk, tmp_path / "x.apk", engine="apksigner", key_pem=signing_material[0], cert_pem=signing_material[1]
+        )
+
+
+def test_uber_engine_reports_when_absent(apk, tmp_path, monkeypatch):
+    from apkmod import signing as signing_mod
+
+    monkeypatch.setattr(signing_mod, "find_uber_signer_jar", lambda: None)
+    with pytest.raises(ApkModError, match="uber-apk-signer needs"):
+        signing_mod.sign_with_uber(apk, tmp_path / "x.apk", keystore=Path("/keys/release.p12"))
+
+
+def test_uber_engine_wants_a_keystore(apk, tmp_path, monkeypatch):
+    from apkmod import signing as signing_mod
+
+    monkeypatch.setattr(signing_mod, "find_uber_signer_jar", lambda: "/cache/uber-apk-signer.jar")
+    monkeypatch.setattr("apkmod.engines.apktool.find_java", lambda: "/jdk/bin/java")
+    with pytest.raises(ApkModError, match="needs --keystore"):
+        signing_mod.sign_with_uber(apk, tmp_path / "x.apk")
+
+
+def test_sign_requires_material(apk, tmp_path):
+    from apkmod import signing as signing_mod
+
+    with pytest.raises(ApkModError, match="provide --key/--cert"):
+        signing_mod.sign(apk, tmp_path / "x.apk")
+
+
+def test_apksigner_command_is_built_from_a_keystore(apk, tmp_path, monkeypatch):
+    """Even without the SDK present, the delegated command line must be correct."""
+    from apkmod import signing as signing_mod
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = [str(c) for c in cmd]
+        (tmp_path / "delegated.apk").write_bytes((tmp_path / "seed.apk").read_bytes())
+        return ToolResult(captured["cmd"], 0, "Signed\n", "")
+
+    (tmp_path / "seed.apk").write_bytes(apk.read_bytes())
+    monkeypatch.setattr(signing_mod, "find_apksigner", lambda: "/sdk/build-tools/34/apksigner")
+    monkeypatch.setattr(signing_mod, "run", fake_run)
+    monkeypatch.setattr(signing_mod, "_resulting_schemes", lambda p: ["v1"])
+
+    signing_mod.sign_with_apksigner(
+        apk, tmp_path / "delegated.apk", keystore=Path("/keys/release.p12"), storepass="secret", alias="rel"
+    )
+    cmd = captured["cmd"]
+    assert cmd[0].endswith("apksigner")
+    assert cmd[1] == "sign"
+    assert "--ks" in cmd and "/keys/release.p12" in cmd
+    assert "--ks-pass" in cmd and "pass:secret" in cmd
+    assert "--ks-key-alias" in cmd and "rel" in cmd
+    assert "--out" in cmd
+
+
+def test_apksigner_rejects_missing_material(apk, tmp_path, monkeypatch):
+    from apkmod import signing as signing_mod
+
+    monkeypatch.setattr(signing_mod, "find_apksigner", lambda: "/sdk/apksigner")
+    with pytest.raises(ApkModError, match="needs --keystore"):
+        signing_mod.sign_with_apksigner(apk, tmp_path / "x.apk")
+

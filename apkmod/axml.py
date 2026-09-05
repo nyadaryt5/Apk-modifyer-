@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass, field
-from typing import Iterator, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from .util import ApkModError
 
