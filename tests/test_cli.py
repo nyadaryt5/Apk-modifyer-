@@ -9,8 +9,13 @@ import zipfile
 import pytest
 
 from apkmod.cli import main
+from apkmod.engines import registry as engine_registry
 
 OPENSSL = shutil.which("openssl")
+
+# The full adapter set. Asserted against the registry rather than hardcoded
+# twice, so adding an engine updates the expectation in one place.
+ENGINE_NAMES = engine_registry.names
 
 
 def _out(capsys) -> str:
@@ -20,7 +25,7 @@ def _out(capsys) -> str:
 def test_doctor(capsys):
     assert main(["doctor"]) == 0
     out = _out(capsys)
-    for engine in ("apktool", "apktool-m", "aee", "patcher"):
+    for engine in ENGINE_NAMES:
         assert engine in out
     assert "ready:" in out
 
@@ -28,7 +33,7 @@ def test_doctor(capsys):
 def test_doctor_json(capsys):
     assert main(["doctor", "--json"]) == 0
     payload = json.loads(_out(capsys))
-    assert [e["name"] for e in payload] == ["apktool", "apktool-m", "aee", "patcher"]
+    assert [e["name"] for e in payload] == ENGINE_NAMES
 
 
 def test_info(capsys, apk):

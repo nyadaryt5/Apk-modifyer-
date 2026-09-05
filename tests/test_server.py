@@ -72,7 +72,15 @@ def test_doctor_endpoint(server):
     status, body = _get(server[0] + "/api/doctor")
     assert status == 200
     names = [e["name"] for e in json.loads(body)]
-    assert names == ["apktool", "apktool-m", "aee", "patcher"]
+    assert names == [
+        "apktool",
+        "apktool-m",
+        "aee",
+        "patcher",
+        "jadx",
+        "frida",
+        "mtmanager",
+    ]
 
 
 def test_upload_then_inspect(server, apk):

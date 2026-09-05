@@ -12,8 +12,16 @@ from apkmod.engines.patcher import DISCLAIMER, PatcherEngine
 from apkmod.util import ApkModError, ToolResult
 
 
-def test_registry_exposes_four_engines():
-    assert registry.names == ["apktool", "apktool-m", "aee", "patcher"]
+def test_registry_exposes_every_engine():
+    assert registry.names == [
+        "apktool",
+        "apktool-m",
+        "aee",
+        "patcher",
+        "jadx",
+        "frida",
+        "mtmanager",
+    ]
 
 
 def test_registry_rejects_unknown_engine():
