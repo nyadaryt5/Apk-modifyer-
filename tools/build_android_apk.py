@@ -30,22 +30,29 @@ def binary_manifest(package="com.omniapk.studio", version="2.0.0"):
     pool_header = struct.pack("<HHIIII", 1, 28, 28+4*len(strings)+len(data), len(strings), 0, 0x100, 28+4*len(strings), 0) if False else None
     # header is type, headerSize, chunkSize, stringCount, styleCount, flags, stringsStart, stylesStart
     pool_size=28+4*len(strings)+len(data)
+    data += b"\0" * ((4 - (len(data) % 4)) % 4)
+    pool_size=28+4*len(strings)+len(data)
     pool=struct.pack("<HH6I",1,28,pool_size,len(strings),0,0x100,28+4*len(strings),0)
     pool += b"".join(struct.pack("<I",o) for o in offsets) + data
     chunks=bytearray(pool)
+    # Resource map lets Android and parsers resolve android:* attribute names.
+    ids={"package":0x0101003f,"versionCode":0x0101021b,"versionName":0x0101021c,
+         "label":0x01010001,"name":0x01010003,"exported":0x01010010}
+    chunks += struct.pack("<HHI",0x0180,8,8+4*len(strings))
+    chunks += b"".join(struct.pack("<I",ids.get(s,0)) for s in strings)
     def ns(start=True):
         typ=0x100 if start else 0x101
         return struct.pack("<HHIIIII",typ,16,24,1,0xFFFFFFFF,idx["android"],idx["http://schemas.android.com/apk/res/android"])
     def start(name, attrs):
         # node header + extended element header
-        out=struct.pack("<HHIIIII",0x102,16,16+20+20*len(attrs),1,0xFFFFFFFF,0xFFFFFFFF,idx[name])
-        out+=struct.pack("<HHHHHH",20,20,len(attrs),0,0,0)
+        out=struct.pack("<HHIII",0x102,16,16+20+20*len(attrs),1,0xFFFFFFFF)
+        out+=struct.pack("<IIHHHHHH",0xFFFFFFFF,idx[name],20,20,len(attrs),0,0,0)
         for an, kind, val in attrs:
             value_idx=idx[val] if kind==3 else 0xFFFFFFFF
-            out += struct.pack("<III BBH", 0xFFFFFFFF if name == "manifest" and an == "package" else idx["http://schemas.android.com/apk/res/android"],idx[an],value_idx,kind,0,val if kind!=3 else 0)
+            out += struct.pack("<III HBB I", 0xFFFFFFFF if name == "manifest" and an == "package" else idx["http://schemas.android.com/apk/res/android"],idx[an],value_idx,8,kind,0,val if kind!=3 else 0)
         return out
     def end(name):
-        return struct.pack("<HHIIIII",0x103,24,24,1,0xFFFFFFFF,0xFFFFFFFF,idx[name])
+        return struct.pack("<HHIIIII",0x103,16,24,1,0xFFFFFFFF,0xFFFFFFFF,idx[name])
     chunks += ns(True)
     chunks += start("manifest", [("package",3,package),("versionCode",0x10,200),("versionName",3,version)])
     chunks += start("application", [("label",3,"OmniAPK Studio")])
