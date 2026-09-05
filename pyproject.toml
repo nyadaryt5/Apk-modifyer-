@@ -25,6 +25,9 @@ dependencies = []
 # Only needed if you want the desktop Apktool engine; the native engines need nothing.
 apktool = ["jdk4py>=17"]
 dev = ["pytest>=7"]
+# Optional: cross-checks the binary parsers against an independent implementation.
+# The suite skips these tests when androguard is not installed.
+crosscheck = ["androguard>=4"]
 
 [project.scripts]
 apkmod = "apkmod.cli:main"

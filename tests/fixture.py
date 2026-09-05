@@ -103,15 +103,20 @@ def axml(strings: Sequence[str], res_ids: Sequence[int], nodes: Sequence[bytes])
 
 
 MANIFEST_STRINGS = [
-    "package",            # 0
-    "versionCode",        # 1
-    "versionName",        # 2
-    "name",               # 3
-    "label",              # 4
-    "debuggable",         # 5
-    "minSdkVersion",      # 6
-    "targetSdkVersion",   # 7
-    "exported",           # 8
+    # The resource map is positional: entry i is the resource id of string i, for
+    # the first len(map) strings. Real files therefore keep the attribute names
+    # that *have* android resource ids at the front, in ascending id order, and
+    # everything else (including the unprefixed "package") follows. Ids verified
+    # against the framework table, not guessed.
+    "label",              # 0   0x01010001
+    "name",               # 1   0x01010003
+    "debuggable",         # 2   0x0101000F
+    "exported",           # 3   0x01010010
+    "minSdkVersion",      # 4   0x0101020C
+    "versionCode",        # 5   0x0101021B
+    "versionName",        # 6   0x0101021C
+    "targetSdkVersion",   # 7   0x01010270
+    "package",            # 8   unprefixed -- no android resource id
     "manifest",           # 9
     "uses-sdk",           # 10
     "uses-permission",    # 11
@@ -132,20 +137,21 @@ MANIFEST_STRINGS = [
     "android",            # 26
 ]
 
+# Resource ids of strings 0..7, ascending, exactly as aapt2 emits them.
 MANIFEST_RES_IDS = [
-    0x0101021B,  # package
-    0x0101021C,  # versionCode
-    0x0101021D,  # versionName
-    0x01010003,  # name
     0x01010001,  # label
+    0x01010003,  # name
     0x0101000F,  # debuggable
-    0x0101020C,  # minSdkVersion
-    0x01010270,  # targetSdkVersion
     0x01010010,  # exported
+    0x0101020C,  # minSdkVersion
+    0x0101021B,  # versionCode
+    0x0101021C,  # versionName
+    0x01010270,  # targetSdkVersion
 ]
 
-PKG, VERCODE, VERNAME, NAME, LABEL = 0, 1, 2, 3, 4
-DEBUGGABLE, MINSDK, TARGETSDK, EXPORTED = 5, 6, 7, 8
+LABEL, NAME, DEBUGGABLE, EXPORTED = 0, 1, 2, 3
+MINSDK, VERCODE, VERNAME, TARGETSDK = 4, 5, 6, 7
+PKG = 8
 MANIFEST, USES_SDK, USES_PERM, APPLICATION, ACTIVITY = 9, 10, 11, 12, 13
 INTENT_FILTER, ACTION, CATEGORY = 14, 15, 16
 PACKAGE_NAME, VERSION_TEXT = 17, 18
@@ -320,7 +326,8 @@ DEX_STRINGS = [
 def build_dex(strings: Sequence[str] = DEX_STRINGS, type_indices: Sequence[int] = (0, 3)) -> bytes:
     header_size = 0x70
     string_ids_off = header_size
-    data_off = string_ids_off + 4 * len(strings)
+    type_ids_off = string_ids_off + 4 * len(strings)
+    data_off = type_ids_off + 4 * len(type_indices)
 
     body = bytearray()
     offsets: List[int] = []
@@ -331,10 +338,22 @@ def build_dex(strings: Sequence[str] = DEX_STRINGS, type_indices: Sequence[int] 
     while len(body) % 4:
         body.append(0)
 
-    type_ids_off = data_off + len(body)
-    type_blob = struct.pack(f"<{len(type_indices)}I", *type_indices)
+    # The map list is not optional: the header points at it and conforming
+    # readers use it to find every section. Without it the file reads as an
+    # empty DEX. Items must be sorted by offset.
+    map_off = data_off + len(body)
+    map_items = [
+        (0x0000, 1, 0),                             # header
+        (0x0001, len(strings), string_ids_off),     # string_id
+        (0x0002, len(type_indices), type_ids_off),  # type_id
+        (0x2005, len(strings), data_off),           # string_data
+        (0x1000, 1, map_off),                       # map_list
+    ]
+    map_blob = struct.pack("<I", len(map_items)) + b"".join(
+        struct.pack("<HHII", kind, 0, count, off) for kind, count, off in map_items
+    )
+    file_size = map_off + len(map_blob)
 
-    file_size = type_ids_off + len(type_blob)
     # DEX header: magic(8) checksum(4) signature(20) file_size(4) header_size(4)
     #             endian_tag(4) link(8) map_off(4) string_ids(8) type_ids(8) ...
     header = bytearray(header_size)
@@ -342,17 +361,28 @@ def build_dex(strings: Sequence[str] = DEX_STRINGS, type_indices: Sequence[int] 
     struct.pack_into("<I", header, 32, file_size)
     struct.pack_into("<I", header, 36, header_size)
     struct.pack_into("<I", header, 40, 0x12345678)         # endian_tag
+    struct.pack_into("<I", header, 52, map_off)            # map_off
     struct.pack_into("<I", header, 56, len(strings))       # string_ids_size
     struct.pack_into("<I", header, 60, string_ids_off)     # string_ids_off
     struct.pack_into("<I", header, 64, len(type_indices))  # type_ids_size
     struct.pack_into("<I", header, 68, type_ids_off)       # type_ids_off
-    struct.pack_into("<I", header, 96, 0)                  # class_defs_size
-    struct.pack_into("<I", header, 104, len(body))         # data_size
+    struct.pack_into("<I", header, 104, file_size - data_off)  # data_size
     struct.pack_into("<I", header, 108, data_off)          # data_off
 
-    blob = bytes(header) + struct.pack(f"<{len(strings)}I", *offsets) + bytes(body) + type_blob
-    blob = blob[:8] + struct.pack("<I", zlib.adler32(blob[12:])) + blob[12:]
+    blob = (
+        bytes(header)
+        + struct.pack(f"<{len(strings)}I", *offsets)
+        + struct.pack(f"<{len(type_indices)}I", *type_indices)
+        + bytes(body)
+        + map_blob
+    )
+    # Order matters. The SHA-1 at 12..31 covers [32:], so it is stable. The
+    # Adler32 at 8..11 covers [12:], which *includes* those 20 signature bytes,
+    # so the checksum has to be computed after the signature is in place. Doing
+    # it the other way round digests 20 zero bytes and every real tool --
+    # androguard, dexdump, the Android verifier -- rejects the file.
     blob = blob[:12] + hashlib.sha1(blob[32:]).digest() + blob[32:]
+    blob = blob[:8] + struct.pack("<I", zlib.adler32(blob[12:])) + blob[12:]
     return blob
 
 

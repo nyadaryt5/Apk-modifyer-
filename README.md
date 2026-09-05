@@ -173,11 +173,20 @@ pip install -e '.[dev]'
 pytest
 ```
 
-141 tests. The fixtures in `tests/fixture.py` are hand-encoded from the format
+150 tests. The fixtures in `tests/fixture.py` are hand-encoded from the format
 specifications and do **not** import `apkmod`, so the binary parsers are checked
 against a second implementation rather than against themselves. The signing
 tests also hand the signature to the `openssl` command line for independent
 verification, and confirm OpenSSL rejects a tampered one.
+
+`pip install -e '.[crosscheck]'` adds 9 more that compare the AXML, ARSC and DEX
+parsers against [androguard](https://github.com/androguard/androguard) — a mature
+implementation written by someone else — and have it parse back the output of my
+writers. Those tests skip when androguard is absent. Writing them found two real
+bugs in the fixtures: the AXML resource map carried invented attribute ids
+(`0x0101021b` is `versionCode`, not `package`), and the DEX Adler32 was computed
+before the SHA-1 signature was written, so it digested twenty zero bytes and
+every real tool rejected the file.
 
 What is *not* covered here, because this sandbox has neither the backend nor a
 device:
