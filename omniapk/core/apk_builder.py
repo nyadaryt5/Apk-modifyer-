@@ -58,7 +58,7 @@ def compile_android_activity_dex(package_name: str = "com.omniapk.studio", activ
         "()Ljava/lang/String;",
         "Z",
         "V",
-        "OmniAPK Studio Pro v2.0.0 (Android Native Engine)"
+        "OmniAPK Studio Pro v2.0.2 (Android Native Engine)"
     ]
 
     string_data_items = []
@@ -288,14 +288,15 @@ class AndroidAppCompiler:
         output_apk_path: Optional[str | Path] = None,
         package_name: str = "com.omniapk.studio",
         app_name: str = "OmniAPK Studio",
-        version_name: str = "2.0.0",
-        version_code: int = 200
+        version_name: str = "2.0.2",
+        version_code: int = 202
     ) -> Path:
         """Compile complete launchable APK for Android."""
         if output_apk_path is None:
             output_apk_path = OUTPUT_DIR / f"OmniAPK_Studio_v{version_name}.apk"
         else:
             output_apk_path = Path(output_apk_path)
+        output_apk_path = Path(str(output_apk_path).replace("v2.0.0", "v2.0.2"))
 
         output_apk_path.parent.mkdir(parents=True, exist_ok=True)
         temp_zip = output_apk_path.with_suffix(".build.tmp.apk")
@@ -374,7 +375,7 @@ class AndroidAppCompiler:
                         zf.write(file_p, f"assets/www/{rel_path}")
 
             # 6. Embedded Core Tools manifest
-            zf.writestr("assets/engine_config.json", b'{"engine": "OmniAPK Studio", "version": "2.0.0", "tools_count": 8, "ai_routing": true}')
+            zf.writestr("assets/engine_config.json", b'{"engine": "OmniAPK Studio", "version": "2.0.2", "tools_count": 8, "native_app": true, "mobile_friendly": true}')
 
         # Sign with V1 (JAR) + V2 (APK Signature Block)
         ApkSigner.sign_apk(temp_zip, output_apk_path)
