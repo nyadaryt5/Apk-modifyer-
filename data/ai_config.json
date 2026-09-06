@@ -1,7 +1,6 @@
 {
   "active_providers": [
-    "groq",
-    "openai"
+    "openai", "anthropic", "gemini", "groq", "deepseek", "mistral", "openrouter", "custom"
   ],
   "keys": {
     "openai": [],

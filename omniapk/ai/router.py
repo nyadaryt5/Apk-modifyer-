@@ -1,3 +1,4 @@
+DEV_MODE = True
 """
 Multi-Cloud AI Router, API Key Pool & Dynamic Auto-Routing Engine.
 Routes requests across OpenAI, Anthropic Claude, Gemini, Groq, DeepSeek, Mistral, OpenRouter, and Custom APIs.
